@@ -72,8 +72,7 @@ const ACCT_TAX = {
   "Brokerage": {type:"Taxable",friction:"High",taxType:"Taxable"},
   "IRA": {type:"Traditional IRA",friction:"None",taxType:"Tax-Deferred"},
   "401k": {type:"401k",friction:"None",taxType:"Tax-Deferred"},
-  "Crypto": {type:"Taxable",friction:"High",taxType:"Taxable"},
-};
+  "Crypto": {type:"Taxable",friction:"High",taxType:"Taxable"}};
 
 function getRebalanceInsights(positions, factorExp, consolidated, totalH) {
   const insights = [];
@@ -188,8 +187,7 @@ const FACTORS = {
   "Conglomerate": "#455A64",
   "Private/Illiquid": "#616161",
   "Mining/Resources": "#795548",
-  "Sports/Betting": "#FF6B35",
-};
+  "Sports/Betting": "#FF6B35"};
 
 // Risk tiers
 const RISK_TIERS = { "Core": "#1565C0", "Growth": "#2E7D32", "Conviction": "#F57F17", "Speculative": "#E65100", "Moonshot": "#B71C1C", "Lottery": "#4A148C", "Hedge": "#00695C", "Illiquid": "#37474F" };
@@ -278,8 +276,7 @@ function applyPrices(positions, priceMap) {
     'GLXY':'GLXY',
     'IBIT':'IBIT','ZETA':'ZETA','GLD':'GLD','NVDA':'NVDA',
     'B':'GOLD','BRK':'BRK-B','HOOD':'HOOD',
-    'VINIX':'VINIX','BTC':'BTCUSD','ETH':'ETHUSD','SOL':'SOLUSD',
-  };
+    'VINIX':'VINIX','BTC':'BTCUSD','ETH':'ETHUSD','SOL':'SOLUSD'};
   
   return positions.map(p => {
     const base = p.id.split('-')[0];
@@ -302,8 +299,7 @@ function applyPrices(positions, priceMap) {
       dailyChangePct: quote.changePct,
       prevClose: quote.prevClose,
       high52: quote.high52,
-      low52: quote.low52,
-    };
+      low52: quote.low52};
   });
 }
 
@@ -313,7 +309,7 @@ const genHistory = () => {
   const start = new Date("2025-06-01"), end = new Date("2026-03-17");
   const days = Math.floor((end - start) / 864e5);
   const data = [];
-  const accts = {"Brokerage":600000,"IRA":200000,,"Crypto":170000};
+  const accts = {"Brokerage":600000,"IRA":200000,"Crypto":170000};
   const fcts = {"Bitcoin/Crypto":240000,"AI/ML":350000,"Rollup/M&A":100000,"PropTech/RE":70000,"Gold/Inflation":50000,"Index/Passive":280000};
   for(let i=0;i<=days;i++){
     const d=new Date(start);d.setDate(d.getDate()+i);
