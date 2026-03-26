@@ -4,10 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Portfolio Command Center</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{background:#06080f;color:#c8d0dc;font-family:'Courier New',monospace;min-height:100vh}
-</style>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{background:#06080f;color:#c8d0dc;font-family:'Courier New',monospace;min-height:100vh}</style>
 </head>
 <body>
 <div id="root"><div style="color:#3a4a5e;padding:40px;text-align:center">Loading dashboard...</div></div>
@@ -15,96 +12,95 @@ body{background:#06080f;color:#c8d0dc;font-family:'Courier New',monospace;min-he
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
 <script type="text/babel">
-const {useState,useMemo} = React;
+const {useState,useMemo}=React;
 const fmt=n=>n>=1e6?`$${(n/1e6).toFixed(2)}M`:n>=1e3?`$${(n/1e3).toFixed(1)}K`:`$${n.toFixed(0)}`;
 const fmtF=n=>`$${Math.round(n).toLocaleString()}`;
 const pct=n=>`${(n*100).toFixed(1)}%`;
 
 const P=[
-// TAXABLE BROKERAGE
-{id:"AAPL",acct:"Taxable",own:"Joint",type:"Stock",qty:800,basis:140000,mv:198400,price:248,factors:{"AI/ML":.4,"Consumer Tech":.4,"Services":.2},risk:"Core",conv:"Hold",tf:"LT"},
-{id:"MSFT",acct:"Taxable",own:"Joint",type:"Stock",qty:400,basis:104000,mv:168000,price:420,factors:{"AI/ML":.5,"Cloud":.3,"Enterprise":.2},risk:"Core",conv:"Hold",tf:"LT"},
-{id:"NVDA",acct:"Taxable",own:"Joint",type:"Stock",qty:500,basis:55000,mv:86500,price:173,factors:{"AI/ML":.5,"Data Centers":.3,"Gaming":.2},risk:"Growth",conv:"Add",tf:"LT"},
-{id:"AMZN",acct:"Taxable",own:"Joint",type:"Stock",qty:250,basis:42500,mv:51250,price:205,factors:{"Cloud":.4,"Consumer Tech":.3,"AI/ML":.3},risk:"Core",conv:"Hold",tf:"LT"},
-{id:"GOOGL",acct:"Taxable",own:"Joint",type:"Stock",qty:300,basis:42000,mv:90300,price:301,factors:{"AI/ML":.5,"AdTech":.3,"Cloud":.2},risk:"Core",conv:"Trim",tf:"LT",notes:"Trim to $50K"},
-{id:"TSLA",acct:"Taxable",own:"Joint",type:"Stock",qty:200,basis:36000,mv:78400,price:392,factors:{"EV/Clean Energy":.4,"AI/ML":.3,"Robotics":.3},risk:"Growth",conv:"Hold",tf:"LT"},
-{id:"IBIT",acct:"Taxable",own:"Joint",type:"ETF",qty:800,basis:36000,mv:31840,price:39.80,factors:{"Bitcoin/Crypto":1},risk:"Core",conv:"Add",tf:"ST"},
-{id:"VST",acct:"Taxable",own:"Joint",type:"Stock",qty:300,basis:36000,mv:47400,price:158,factors:{"Energy/Power":.7,"AI/ML":.2,"Nuclear":.1},risk:"Growth",conv:"Add",tf:"LT"},
-{id:"CEG",acct:"Taxable",own:"Joint",type:"Stock",qty:100,basis:22000,mv:27500,price:275,factors:{"Energy/Power":.6,"Nuclear":.3,"AI/ML":.1},risk:"Growth",conv:"Add",tf:"ST"},
-{id:"COIN",acct:"Taxable",own:"Joint",type:"Stock",qty:80,basis:20000,mv:15800,price:197.50,factors:{"Bitcoin/Crypto":.7,"Fintech":.3},risk:"Growth",conv:"Hold",tf:"ST"},
-{id:"GLD",acct:"Taxable",own:"Joint",type:"ETF",qty:60,basis:22800,mv:24780,price:413,factors:{"Gold/Inflation":1},risk:"Hedge",conv:"Hold",tf:"LT"},
-{id:"JPM",acct:"Taxable",own:"Joint",type:"Stock",qty:150,basis:26250,mv:37200,price:248,factors:{"Financials":.7,"Fintech":.3},risk:"Core",conv:"Hold",tf:"LT"},
-{id:"UNH",acct:"Taxable",own:"Joint",type:"Stock",qty:50,basis:26500,mv:27500,price:550,factors:{"Healthcare":.8,"AI/ML":.2},risk:"Core",conv:"Hold",tf:"LT"},
-{id:"HOOD",acct:"Taxable",own:"Joint",type:"Stock",qty:200,basis:5600,mv:14178,price:70.89,factors:{"Fintech":.6,"Bitcoin/Crypto":.2,"Consumer Tech":.2},risk:"Growth",conv:"Hold",tf:"ST"},
-{id:"QXO-tax",acct:"Taxable",own:"Joint",type:"Stock",qty:2000,basis:42000,mv:37280,price:18.64,factors:{"Rollup/M&A":1},risk:"Conviction",conv:"Add",tf:"ST"},
-// OPTIONS IN TAXABLE
-{id:"AAPL-C260",acct:"Taxable",own:"Joint",type:"Option",qty:10,basis:7000,mv:8500,price:8.50,strike:260,exp:"2026-09-18",factors:{"Consumer Tech":.5,"AI/ML":.5},risk:"Growth",conv:"Monitor",tf:"ST"},
-{id:"NVDA-C200",acct:"Taxable",own:"Joint",type:"Option",qty:8,basis:9600,mv:6400,price:8.00,strike:200,exp:"2026-09-18",factors:{"AI/ML":.7,"Data Centers":.3},risk:"Speculative",conv:"Monitor",tf:"ST"},
-{id:"TSLA-C500",acct:"Taxable",own:"Joint",type:"Option",qty:5,basis:6000,mv:3750,price:7.50,strike:500,exp:"2026-12-18",factors:{"EV/Clean Energy":.5,"Robotics":.5},risk:"Speculative",conv:"Hold",tf:"ST"},
-{id:"VST-C200",acct:"Taxable",own:"Joint",type:"Option",qty:10,basis:5000,mv:7500,price:7.50,strike:200,exp:"2027-01-15",factors:{"Energy/Power":.8,"Nuclear":.2},risk:"Conviction",conv:"Hold",tf:"ST",notes:"LEAPS"},
-{id:"QXO-C25",acct:"Taxable",own:"Joint",type:"Option",qty:20,basis:4000,mv:2600,price:1.30,strike:25,exp:"2026-06-20",factors:{"Rollup/M&A":1},risk:"Speculative",conv:"Monitor",tf:"ST"},
-{id:"COIN-C250",acct:"Taxable",own:"Joint",type:"Option",qty:5,basis:4500,mv:2250,price:4.50,strike:250,exp:"2026-09-18",factors:{"Bitcoin/Crypto":.7,"Fintech":.3},risk:"Speculative",conv:"Monitor",tf:"ST"},
-// RETIREMENT IRA
-{id:"PLTR",acct:"IRA",own:"Owner A",type:"Stock",qty:600,basis:13800,mv:59400,price:99,factors:{"AI/ML":.6,"Defense":.3,"Data Centers":.1},risk:"Growth",conv:"Hold",tf:"ST"},
-{id:"NVDA-ira",acct:"IRA",own:"Owner A",type:"Stock",qty:200,basis:22000,mv:34600,price:173,factors:{"AI/ML":.5,"Data Centers":.3,"Gaming":.2},risk:"Growth",conv:"Add",tf:"ST"},
-{id:"QXO-ira",acct:"IRA",own:"Owner A",type:"Stock",qty:2000,basis:42000,mv:37280,price:18.64,factors:{"Rollup/M&A":1},risk:"Conviction",conv:"Add",tf:"ST",notes:"Kodiak deal Q2"},
-{id:"IBIT-ira",acct:"IRA",own:"Owner A",type:"ETF",qty:600,basis:33000,mv:23880,price:39.80,factors:{"Bitcoin/Crypto":1},risk:"Core",conv:"Hold",tf:"ST"},
-{id:"TSLA-ira",acct:"IRA",own:"Owner A",type:"Stock",qty:100,basis:30000,mv:39200,price:392,factors:{"EV/Clean Energy":.4,"AI/ML":.3,"Robotics":.3},risk:"Growth",conv:"Hold",tf:"ST"},
-{id:"VST-ira",acct:"IRA",own:"Owner A",type:"Stock",qty:200,basis:24000,mv:31600,price:158,factors:{"Energy/Power":.7,"AI/ML":.2,"Nuclear":.1},risk:"Growth",conv:"Add",tf:"ST"},
-{id:"B-ira",acct:"IRA",own:"Owner A",type:"Stock",qty:500,basis:8500,mv:18570,price:37.14,factors:{"Gold/Inflation":.7,"Mining":.3},risk:"Core",conv:"Hold",tf:"ST",notes:"+118%"},
-{id:"BRK-ira",acct:"IRA",own:"Owner A",type:"Stock",qty:30,basis:10500,mv:14428,price:480.94,factors:{"Conglomerate":.5,"Insurance":.3,"Fintech":.2},risk:"Core",conv:"Hold",tf:"LT"},
-{id:"ZETA-ira",acct:"IRA",own:"Owner A",type:"Stock",qty:500,basis:10000,mv:8475,price:16.95,factors:{"AdTech":.5,"AI/ML":.5},risk:"Growth",conv:"Hold",tf:"ST"},
-{id:"HOOD-ira",acct:"IRA",own:"Owner A",type:"Stock",qty:100,basis:2800,mv:7089,price:70.89,factors:{"Fintech":.6,"Bitcoin/Crypto":.2,"Consumer Tech":.2},risk:"Growth",conv:"Hold",tf:"ST"},
-// OPTIONS IN IRA
-{id:"TSLA-C450",acct:"IRA",own:"Owner A",type:"Option",qty:5,basis:7200,mv:5400,price:10.80,strike:450,exp:"2027-01-15",factors:{"EV/Clean Energy":.5,"Robotics":.5},risk:"Speculative",conv:"Hold",tf:"ST",notes:"LEAPS"},
-{id:"QXO-C10",acct:"IRA",own:"Owner A",type:"Option",qty:10,basis:5000,mv:9640,price:9.64,strike:10,exp:"2027-01-15",factors:{"Rollup/M&A":1},risk:"Conviction",conv:"Hold",tf:"ST",notes:"+93%"},
-{id:"QXO-C18",acct:"IRA",own:"Owner A",type:"Option",qty:30,basis:21000,mv:21000,price:7.00,strike:18,exp:"2028-01-21",factors:{"Rollup/M&A":1},risk:"Conviction",conv:"Hold",tf:"ST",notes:"Jan 28 LEAPS"},
-{id:"COIN-C300",acct:"IRA",own:"Owner A",type:"Option",qty:3,basis:4500,mv:1800,price:6.00,strike:300,exp:"2027-01-15",factors:{"Bitcoin/Crypto":.7,"Fintech":.3},risk:"Lottery",conv:"Monitor",tf:"ST"},
+// TAXABLE
+{id:"AAPL",acct:"Taxable",own:"Joint",type:"Stock",qty:1500,basis:262500,mv:372000,price:248,factors:{"AI/ML":.4,"Consumer Tech":.4,"Services":.2},risk:"Core",conv:"Hold"},
+{id:"MSFT",acct:"Taxable",own:"Joint",type:"Stock",qty:600,basis:156000,mv:252000,price:420,factors:{"AI/ML":.5,"Cloud":.3,"Enterprise":.2},risk:"Core",conv:"Hold"},
+{id:"NVDA",acct:"Taxable",own:"Joint",type:"Stock",qty:800,basis:88000,mv:138400,price:173,factors:{"AI/ML":.5,"Data Centers":.3,"Gaming":.2},risk:"Growth",conv:"Add"},
+{id:"AMZN",acct:"Taxable",own:"Joint",type:"Stock",qty:400,basis:68000,mv:82000,price:205,factors:{"Cloud":.4,"Consumer Tech":.3,"AI/ML":.3},risk:"Core",conv:"Hold"},
+{id:"GOOGL",acct:"Taxable",own:"Joint",type:"Stock",qty:500,basis:70000,mv:150500,price:301,factors:{"AI/ML":.5,"AdTech":.3,"Cloud":.2},risk:"Core",conv:"Trim",notes:"Trim to $80K"},
+{id:"TSLA",acct:"Taxable",own:"Joint",type:"Stock",qty:300,basis:54000,mv:117600,price:392,factors:{"EV/Clean Energy":.4,"AI/ML":.3,"Robotics":.3},risk:"Growth",conv:"Hold"},
+{id:"IBIT",acct:"Taxable",own:"Joint",type:"ETF",qty:1500,basis:67500,mv:59700,price:39.80,factors:{"Bitcoin/Crypto":1},risk:"Core",conv:"Add"},
+{id:"VST",acct:"Taxable",own:"Joint",type:"Stock",qty:500,basis:60000,mv:79000,price:158,factors:{"Energy/Power":.7,"AI/ML":.2,"Nuclear":.1},risk:"Growth",conv:"Add"},
+{id:"CEG",acct:"Taxable",own:"Joint",type:"Stock",qty:150,basis:33000,mv:41250,price:275,factors:{"Energy/Power":.6,"Nuclear":.3,"AI/ML":.1},risk:"Growth",conv:"Add"},
+{id:"COIN",acct:"Taxable",own:"Joint",type:"Stock",qty:120,basis:30000,mv:23700,price:197.50,factors:{"Bitcoin/Crypto":.7,"Fintech":.3},risk:"Growth",conv:"Hold"},
+{id:"GLD",acct:"Taxable",own:"Joint",type:"ETF",qty:80,basis:30400,mv:33040,price:413,factors:{"Gold/Inflation":1},risk:"Hedge",conv:"Hold"},
+{id:"JPM",acct:"Taxable",own:"Joint",type:"Stock",qty:200,basis:35000,mv:49600,price:248,factors:{"Financials":.7,"Fintech":.3},risk:"Core",conv:"Hold"},
+{id:"UNH",acct:"Taxable",own:"Joint",type:"Stock",qty:60,basis:31800,mv:33000,price:550,factors:{"Healthcare":.8,"AI/ML":.2},risk:"Core",conv:"Hold"},
+{id:"HOOD",acct:"Taxable",own:"Joint",type:"Stock",qty:300,basis:8400,mv:21267,price:70.89,factors:{"Fintech":.6,"Bitcoin/Crypto":.2,"Consumer Tech":.2},risk:"Growth",conv:"Hold"},
+{id:"QXO-tax",acct:"Taxable",own:"Joint",type:"Stock",qty:3000,basis:63000,mv:55920,price:18.64,factors:{"Rollup/M&A":1},risk:"Conviction",conv:"Add"},
+// TAXABLE OPTIONS
+{id:"AAPL-C260",acct:"Taxable",own:"Joint",type:"Option",qty:15,basis:10500,mv:12750,price:8.50,strike:260,exp:"2026-09-18",factors:{"Consumer Tech":.5,"AI/ML":.5},risk:"Growth",conv:"Monitor"},
+{id:"NVDA-C200",acct:"Taxable",own:"Joint",type:"Option",qty:10,basis:12000,mv:8000,price:8.00,strike:200,exp:"2026-09-18",factors:{"AI/ML":.7,"Data Centers":.3},risk:"Speculative",conv:"Monitor"},
+{id:"TSLA-C500",acct:"Taxable",own:"Joint",type:"Option",qty:8,basis:9600,mv:6000,price:7.50,strike:500,exp:"2026-12-18",factors:{"EV/Clean Energy":.5,"Robotics":.5},risk:"Speculative",conv:"Hold"},
+{id:"VST-C200",acct:"Taxable",own:"Joint",type:"Option",qty:15,basis:7500,mv:11250,price:7.50,strike:200,exp:"2027-01-15",factors:{"Energy/Power":.8,"Nuclear":.2},risk:"Conviction",conv:"Hold",notes:"LEAPS"},
+{id:"QXO-C25",acct:"Taxable",own:"Joint",type:"Option",qty:30,basis:6000,mv:3900,price:1.30,strike:25,exp:"2026-06-20",factors:{"Rollup/M&A":1},risk:"Speculative",conv:"Monitor"},
+{id:"COIN-C250",acct:"Taxable",own:"Joint",type:"Option",qty:8,basis:7200,mv:3600,price:4.50,strike:250,exp:"2026-09-18",factors:{"Bitcoin/Crypto":.7,"Fintech":.3},risk:"Speculative",conv:"Monitor"},
+{id:"GOOGL-C350",acct:"Taxable",own:"Joint",type:"Option",qty:5,basis:4000,mv:1500,price:3.00,strike:350,exp:"2026-04-17",factors:{"AI/ML":.5,"Cloud":.5},risk:"Speculative",conv:"Monitor",notes:"24 DAYS LEFT"},
+{id:"TSLA-C420",acct:"Taxable",own:"Joint",type:"Option",qty:10,basis:8000,mv:5000,price:5.00,strike:420,exp:"2026-04-03",factors:{"EV/Clean Energy":.5,"Robotics":.5},risk:"Speculative",conv:"Monitor",notes:"11 DAYS - URGENT"},
+// IRA
+{id:"PLTR",acct:"IRA",own:"Owner A",type:"Stock",qty:800,basis:18400,mv:79200,price:99,factors:{"AI/ML":.6,"Defense":.3,"Data Centers":.1},risk:"Growth",conv:"Hold",notes:"+330%"},
+{id:"NVDA-ira",acct:"IRA",own:"Owner A",type:"Stock",qty:300,basis:33000,mv:51900,price:173,factors:{"AI/ML":.5,"Data Centers":.3,"Gaming":.2},risk:"Growth",conv:"Add"},
+{id:"QXO-ira",acct:"IRA",own:"Owner A",type:"Stock",qty:3000,basis:63000,mv:55920,price:18.64,factors:{"Rollup/M&A":1},risk:"Conviction",conv:"Add",notes:"Kodiak Q2"},
+{id:"IBIT-ira",acct:"IRA",own:"Owner A",type:"ETF",qty:1000,basis:55000,mv:39800,price:39.80,factors:{"Bitcoin/Crypto":1},risk:"Core",conv:"Hold"},
+{id:"TSLA-ira",acct:"IRA",own:"Owner A",type:"Stock",qty:150,basis:45000,mv:58800,price:392,factors:{"EV/Clean Energy":.4,"AI/ML":.3,"Robotics":.3},risk:"Growth",conv:"Hold"},
+{id:"VST-ira",acct:"IRA",own:"Owner A",type:"Stock",qty:300,basis:36000,mv:47400,price:158,factors:{"Energy/Power":.7,"AI/ML":.2,"Nuclear":.1},risk:"Growth",conv:"Add"},
+{id:"B-ira",acct:"IRA",own:"Owner A",type:"Stock",qty:800,basis:13600,mv:29712,price:37.14,factors:{"Gold/Inflation":.7,"Mining":.3},risk:"Core",conv:"Hold"},
+{id:"BRK-ira",acct:"IRA",own:"Owner A",type:"Stock",qty:40,basis:14000,mv:19238,price:480.94,factors:{"Conglomerate":.5,"Insurance":.3,"Fintech":.2},risk:"Core",conv:"Hold"},
+{id:"ZETA-ira",acct:"IRA",own:"Owner A",type:"Stock",qty:800,basis:16000,mv:13560,price:16.95,factors:{"AdTech":.5,"AI/ML":.5},risk:"Growth",conv:"Hold"},
+{id:"HOOD-ira",acct:"IRA",own:"Owner A",type:"Stock",qty:150,basis:4200,mv:10634,price:70.89,factors:{"Fintech":.6,"Bitcoin/Crypto":.2,"Consumer Tech":.2},risk:"Growth",conv:"Hold"},
+// IRA OPTIONS
+{id:"TSLA-C450",acct:"IRA",own:"Owner A",type:"Option",qty:8,basis:11520,mv:8640,price:10.80,strike:450,exp:"2027-01-15",factors:{"EV/Clean Energy":.5,"Robotics":.5},risk:"Speculative",conv:"Hold",notes:"LEAPS"},
+{id:"QXO-C10",acct:"IRA",own:"Owner A",type:"Option",qty:15,basis:7500,mv:14460,price:9.64,strike:10,exp:"2027-01-15",factors:{"Rollup/M&A":1},risk:"Conviction",conv:"Hold",notes:"+93%"},
+{id:"QXO-C18",acct:"IRA",own:"Owner A",type:"Option",qty:40,basis:28000,mv:28000,price:7.00,strike:18,exp:"2028-01-21",factors:{"Rollup/M&A":1},risk:"Conviction",conv:"Hold"},
+{id:"COIN-C300",acct:"IRA",own:"Owner A",type:"Option",qty:5,basis:7500,mv:3000,price:6.00,strike:300,exp:"2027-01-15",factors:{"Bitcoin/Crypto":.7,"Fintech":.3},risk:"Lottery",conv:"Monitor"},
+{id:"NVDA-C250",acct:"IRA",own:"Owner A",type:"Option",qty:5,basis:3000,mv:1750,price:3.50,strike:250,exp:"2026-04-10",factors:{"AI/ML":.7,"Data Centers":.3},risk:"Speculative",conv:"Monitor",notes:"18 DAYS"},
 // ROTH IRA
-{id:"MSFT-roth",acct:"Roth IRA",own:"Owner B",type:"Stock",qty:100,basis:26000,mv:42000,price:420,factors:{"AI/ML":.5,"Cloud":.3,"Enterprise":.2},risk:"Core",conv:"Hold",tf:"LT"},
-{id:"IBIT-roth",acct:"Roth IRA",own:"Owner B",type:"ETF",qty:400,basis:22000,mv:15920,price:39.80,factors:{"Bitcoin/Crypto":1},risk:"Core",conv:"Hold",tf:"ST"},
-{id:"ZETA-roth",acct:"Roth IRA",own:"Owner B",type:"Stock",qty:300,basis:6300,mv:5085,price:16.95,factors:{"AdTech":.5,"AI/ML":.5},risk:"Growth",conv:"Hold",tf:"ST"},
-{id:"NVDA-roth",acct:"Roth IRA",own:"Owner B",type:"Stock",qty:50,basis:5500,mv:8650,price:173,factors:{"AI/ML":.5,"Data Centers":.3,"Gaming":.2},risk:"Growth",conv:"Add",tf:"ST"},
+{id:"MSFT-roth",acct:"Roth IRA",own:"Owner B",type:"Stock",qty:150,basis:39000,mv:63000,price:420,factors:{"AI/ML":.5,"Cloud":.3,"Enterprise":.2},risk:"Core",conv:"Hold"},
+{id:"IBIT-roth",acct:"Roth IRA",own:"Owner B",type:"ETF",qty:600,basis:33000,mv:23880,price:39.80,factors:{"Bitcoin/Crypto":1},risk:"Core",conv:"Hold"},
+{id:"ZETA-roth",acct:"Roth IRA",own:"Owner B",type:"Stock",qty:500,basis:10500,mv:8475,price:16.95,factors:{"AdTech":.5,"AI/ML":.5},risk:"Growth",conv:"Hold"},
+{id:"NVDA-roth",acct:"Roth IRA",own:"Owner B",type:"Stock",qty:100,basis:11000,mv:17300,price:173,factors:{"AI/ML":.5,"Data Centers":.3,"Gaming":.2},risk:"Growth",conv:"Add"},
+{id:"TSLA-roth",acct:"Roth IRA",own:"Owner B",type:"Stock",qty:50,basis:15000,mv:19600,price:392,factors:{"EV/Clean Energy":.4,"AI/ML":.3,"Robotics":.3},risk:"Growth",conv:"Hold"},
 // 401K
-{id:"VINIX",acct:"401k",own:"Owner B",type:"Index",qty:500,basis:241000,mv:262500,price:525,factors:{"Index/Passive":.6,"AI/ML":.15,"Financials":.15,"Healthcare":.1},risk:"Core",conv:"Hold",tf:"LT",notes:"Employer 401k"},
-{id:"VBTLX",acct:"401k",own:"Owner B",type:"Index",qty:2000,basis:19800,mv:20200,price:10.10,factors:{"Bonds/Fixed Income":1},risk:"Hedge",conv:"Hold",tf:"LT"},
+{id:"VINIX",acct:"401k",own:"Owner B",type:"Index",qty:900,basis:435000,mv:472500,price:525,factors:{"Index/Passive":.6,"AI/ML":.15,"Financials":.15,"Healthcare":.1},risk:"Core",conv:"Hold"},
+{id:"VBTLX",acct:"401k",own:"Owner B",type:"Index",qty:3000,basis:29700,mv:30300,price:10.10,factors:{"Bonds/Fixed Income":1},risk:"Hedge",conv:"Hold"},
 // CRYPTO
-{id:"BTC",acct:"Crypto",own:"Joint",type:"Crypto",qty:2,basis:64000,mv:141258,price:70629,factors:{"Bitcoin/Crypto":1},risk:"Core",conv:"Hold",tf:"LT",notes:"+$77K"},
-{id:"ETH",acct:"Crypto",own:"Joint",type:"Crypto",qty:10,basis:30000,mv:20500,price:2050,factors:{"Bitcoin/Crypto":.5,"AI/ML":.2,"DeFi":.3},risk:"Growth",conv:"Hold",tf:"LT"},
-{id:"SOL",acct:"Crypto",own:"Joint",type:"Crypto",qty:100,basis:8000,mv:9000,price:90,factors:{"Bitcoin/Crypto":.4,"DeFi":.3,"AI/ML":.3},risk:"Speculative",conv:"Hold",tf:"ST"},
+{id:"BTC",acct:"Crypto",own:"Joint",type:"Crypto",qty:5,basis:160000,mv:353145,price:70629,factors:{"Bitcoin/Crypto":1},risk:"Core",conv:"Hold",notes:"+$116K"},
+{id:"ETH",acct:"Crypto",own:"Joint",type:"Crypto",qty:15,basis:45000,mv:30750,price:2050,factors:{"Bitcoin/Crypto":.5,"AI/ML":.2,"DeFi":.3},risk:"Growth",conv:"Hold"},
+{id:"SOL",acct:"Crypto",own:"Joint",type:"Crypto",qty:200,basis:16000,mv:18000,price:90,factors:{"Bitcoin/Crypto":.4,"DeFi":.3,"AI/ML":.3},risk:"Speculative",conv:"Hold"},
 ];
-const CASH=[{acct:"Taxable",own:"Joint",amt:285000},{acct:"IRA",own:"Owner A",amt:25000},{acct:"Roth IRA",own:"Owner B",amt:12000},{acct:"401k",own:"Owner B",amt:15000},{acct:"Crypto",own:"Joint",amt:18000}];
+const CASH=[{acct:"Taxable",own:"Joint",amt:580000},{acct:"IRA",own:"Owner A",amt:95000},{acct:"Roth IRA",own:"Owner B",amt:50000},{acct:"401k",own:"Owner B",amt:55000},{acct:"Crypto",own:"Joint",amt:25000}];
 const AC={"Taxable":"#00e5ff","IRA":"#448aff","Roth IRA":"#7c4dff","401k":"#69f0ae","Crypto":"#f7931a"};
 const FC={"Bitcoin/Crypto":"#F7931A","AI/ML":"#4285F4","Rollup/M&A":"#2ECC71","Energy/Power":"#E74C3C","Gold/Inflation":"#FFD700","Index/Passive":"#1E88E5","Cloud":"#00BCD4","Fintech":"#FF9800","Consumer Tech":"#FF6B35","Data Centers":"#00897B","EV/Clean Energy":"#8E44AD","Healthcare":"#E91E63","Financials":"#455A64","Defense":"#26A69A","AdTech":"#AB47BC","Robotics":"#78909C","Gaming":"#CDDC39","Nuclear":"#FF5722","Conglomerate":"#607D8B","Insurance":"#9E9E9E","Mining":"#795548","DeFi":"#00E676","Enterprise":"#546E7A","Services":"#BDBDBD","Bonds/Fixed Income":"#90A4AE"};
-
-// Simulated history
-const genH=()=>{const d=[];const start=new Date("2025-06-01");const end=new Date("2026-03-23");const days=Math.floor((end-start)/864e5);let hh=3200000;for(let i=0;i<=days;i++){const dt=new Date(start);dt.setDate(dt.getDate()+i);if(dt.getDay()===0||dt.getDay()===6)continue;hh*=(1+(Math.random()-.48)*.012);d.push({date:dt.toISOString().split("T")[0],ts:dt.getTime(),hh:Math.round(hh)})}if(d.length>0)d[d.length-1].hh=4010000;return d};
+const genH=()=>{const d=[];let hh=3500000;for(let i=0;i<=200;i++){const dt=new Date("2025-06-01");dt.setDate(dt.getDate()+i);if(dt.getDay()===0||dt.getDay()===6)continue;hh*=(1+(Math.random()-.48)*.012);d.push({date:dt.toISOString().split("T")[0],ts:dt.getTime(),hh:Math.round(hh)})}if(d.length)d[d.length-1].hh=4010000;return d};
 const HIST=genH();
-
 const TRADES=[
-{id:1,date:"2026-03-18",symbol:"NVDA",action:"BUY",qty:200,price:165,account:"IRA",thesis:"AI infrastructure pullback — adding on weakness below $170.",strategy:"Accumulate on dips in tax-free",exitPlan:"Trim 25% at $220",status:"OPEN",tags:["AI/ML"]},
-{id:2,date:"2026-03-15",symbol:"VST",action:"BUY",qty:200,price:148,account:"Taxable",thesis:"Energy demand from AI data centers. Nuclear renaissance play.",strategy:"Long-term hold",exitPlan:"Hold until $250+",status:"OPEN",tags:["Energy/Power"]},
-{id:3,date:"2026-03-10",symbol:"QXO",action:"BUY",qty:1000,price:21,account:"IRA",thesis:"Brad Jacobs acquiring Kodiak. Building products rollup.",strategy:"Accumulate pre-close",exitPlan:"Trim at $30",status:"OPEN",tags:["Rollup/M&A"]},
-{id:4,date:"2026-03-01",symbol:"TSLA",action:"BUY",qty:100,price:350,account:"Taxable",thesis:"Robotaxi launch imminent. FSD improving. Optimus humanoid.",strategy:"Core growth position",exitPlan:"Never — hold for $10T",status:"OPEN",tags:["EV/Clean Energy","Robotics"]},
-{id:5,date:"2026-02-20",symbol:"GOOGL",action:"SELL",qty:200,price:315,account:"Taxable",thesis:"Trimming winner to redeploy. Using carried losses.",strategy:"Reduce from $120K to $50K",exitPlan:"N/A — exited partial",status:"CLOSED",tags:["AI/ML"]},
+{id:1,date:"2026-03-18",symbol:"NVDA",action:"BUY",qty:200,price:165,account:"IRA",thesis:"AI infrastructure pullback.",strategy:"Accumulate on dips",exitPlan:"Trim 25% at $220",status:"OPEN",tags:["AI/ML"],comments:["3/18: Entry at $165 on S&P selloff","3/20: Down another 5%, holding conviction"]},
+{id:2,date:"2026-03-15",symbol:"VST",action:"BUY",qty:200,price:148,account:"Taxable",thesis:"Energy demand from AI data centers.",strategy:"Long-term hold",exitPlan:"Hold until $250+",status:"OPEN",tags:["Energy/Power"],comments:["3/15: Initiated position on nuclear thesis"]},
+{id:3,date:"2026-03-10",symbol:"QXO",action:"BUY",qty:1000,price:21,account:"IRA",thesis:"Kodiak acquisition thesis.",strategy:"Accumulate pre-close",exitPlan:"Trim at $30",status:"OPEN",tags:["Rollup/M&A"],comments:["3/10: Added 1000 shares","3/20: QXO down to $18.64, still bullish on deal"]},
+{id:4,date:"2026-03-01",symbol:"TSLA",action:"BUY",qty:100,price:350,account:"Taxable",thesis:"Robotaxi + Optimus.",strategy:"Core growth",exitPlan:"Never sell",status:"OPEN",tags:["EV/Clean Energy"],comments:["3/1: FSD V13 impressive, adding"]},
+{id:5,date:"2026-02-20",symbol:"GOOGL",action:"SELL",qty:200,price:315,account:"Taxable",thesis:"AI agents disrupting search.",strategy:"Reduce exposure",exitPlan:"N/A",status:"CLOSED",tags:["AI/ML"],comments:["2/20: Trimmed 200 shares at $315","Using carried losses to offset"]},
 ];
-
 const WL_DEFAULT=[
-{sym:"ARM",thesis:"AI chip architecture licensing monopoly",range:"$120-135",priority:"HIGH",acct:"IRA",fw:{"AI/ML":.7,"Data Centers":.3}},
-{sym:"LNG",thesis:"LNG infrastructure — war beneficiary",range:"$180-195",priority:"MEDIUM",acct:"Taxable",fw:{"Energy/Power":.8,"Infrastructure":.2}},
-{sym:"MSTR",thesis:"Bitcoin treasury company — leveraged BTC exposure",range:"$250-280",priority:"HIGH",acct:"Taxable",fw:{"Bitcoin/Crypto":1}},
-{sym:"CEG",thesis:"Nuclear power for AI data centers",range:"$260-280",priority:"HIGH",acct:"IRA",fw:{"Energy/Power":.6,"Nuclear":.4}},
-{sym:"PLTR",thesis:"AI defense + commercial platform",range:"$85-95",priority:"MEDIUM",acct:"Taxable",fw:{"AI/ML":.6,"Defense":.4}},
+{sym:"ARM",thesis:"AI chip architecture licensing monopoly",range:"$120-135",priority:"HIGH",acct:"IRA",fw:{}},
+{sym:"LNG",thesis:"LNG infrastructure — war beneficiary",range:"$180-195",priority:"MEDIUM",acct:"Taxable",fw:{}},
+{sym:"MSTR",thesis:"Bitcoin treasury — leveraged BTC",range:"$250-280",priority:"HIGH",acct:"Taxable",fw:{}},
+{sym:"SMCI",thesis:"AI server leader if legal issues resolve",range:"$25-30",priority:"LOW",acct:"IRA",fw:{}},
+{sym:"RKLB",thesis:"Space infrastructure + defense",range:"$20-25",priority:"MEDIUM",acct:"IRA",fw:{}},
 ];
-
 const INSIGHTS=[
-{id:1,date:"2026-03-23",type:"Epiphany",symbols:"Portfolio",text:"Bitcoin + AI infrastructure = 45% of active portfolio. This is intentional — these are the only two themes that matter for the next decade.",action:"Maintain allocation. Add on dips.",priority:"Important"},
-{id:2,date:"2026-03-20",type:"Risk Alert",symbols:"QXO-C25",text:"QXO $25 Call expiring June 20. QXO at $18.64 — needs 34% move in 3 months.",action:"Monitor Kodiak close timeline. If deal slips to Q3, sell calls.",priority:"Urgent"},
-{id:3,date:"2026-03-18",type:"Market Observation",symbols:"SPY",text:"S&P broke below 200-day MA. Historical avg drawdown: 17%. But avg return over next 12 months: +16%. This is a buying opportunity.",action:"Deploy $100K cash into NVDA and IBIT on further weakness.",priority:"Important"},
-{id:4,date:"2026-03-15",type:"Thesis Change",symbols:"GOOGL",text:"AI agents are disrupting search. Cursor/Claude replacing Google for developers. Trim more aggressively.",action:"Sell another $30K worth this week.",priority:"Urgent"},
+{id:1,date:"2026-03-23",type:"Epiphany",symbols:"Portfolio",text:"Bitcoin + AI infrastructure + Energy = 55% of active portfolio. These 3 themes are the only ones that matter.",action:"Maintain. Add on dips.",priority:"Important"},
+{id:2,date:"2026-03-20",type:"Risk Alert",symbols:"TSLA-C420, GOOGL-C350",text:"Two short-dated options expiring in 11 and 24 days. Combined $6.5K at risk.",action:"Sell TSLA-C420 Monday. Hold GOOGL-C350 if GOOGL above $310.",priority:"Urgent"},
+{id:3,date:"2026-03-18",type:"Market Observation",symbols:"SPY",text:"S&P broke 200-day MA. Avg drawdown 17% but avg 12-month forward return +16%.",action:"Deploy cash into NVDA and IBIT.",priority:"Important"},
+{id:4,date:"2026-03-15",type:"Thesis Change",symbols:"GOOGL",text:"AI agents disrupting search faster than expected. Trim more aggressively.",action:"Sell another $30K this week.",priority:"Urgent"},
 ];
 
-function LineChart({data,height=200}){
+function LineChart({data,height=220}){
   const [hover,setHover]=useState(null);
   if(!data||data.length<2)return null;
   const w=680,h=height,pad={t:15,r:15,b:25,l:60};
@@ -114,20 +110,19 @@ function LineChart({data,height=200}){
   const sx=v=>pad.l+((v-xMin)/(xMax-xMin))*iw;
   const sy=v=>pad.t+ih-((v-yMin)/(yMax-yMin))*ih;
   const pts=data.map(d=>sx(d.ts)+","+sy(d.hh)).join(" L");
-  const area="M"+pts+"L"+sx(data[data.length-1].ts)+","+sy(yMin)+"L"+sx(data[0].ts)+","+sy(yMin)+"Z";
+  const area="M"+pts+"L"+sx(xMax)+","+sy(yMin)+"L"+sx(xMin)+","+sy(yMin)+"Z";
   const yT=Array.from({length:4},(_,i)=>yMin+(yMax-yMin)*(i/3));
   const hd=hover!==null&&hover<data.length?data[hover]:null;
-  const handleMouse=e=>{const r=e.currentTarget.getBoundingClientRect();const x=(e.clientX-r.left)/r.width*w;const ratio=Math.max(0,Math.min(1,(x-pad.l)/iw));setHover(Math.round(ratio*(data.length-1)))};
-  return <div><svg width="100%" height={h} viewBox={"0 0 "+w+" "+h} style={{display:"block",cursor:"crosshair"}} onMouseMove={handleMouse} onMouseLeave={()=>setHover(null)}>
+  const hM=e=>{const r=e.currentTarget.getBoundingClientRect();const x=(e.clientX-r.left)/r.width*w;setHover(Math.round(Math.max(0,Math.min(1,(x-pad.l)/iw))*(data.length-1)))};
+  return <div><svg width="100%" height={h} viewBox={"0 0 "+w+" "+h} style={{display:"block",cursor:"crosshair"}} onMouseMove={hM} onMouseLeave={()=>setHover(null)}>
     {yT.map((v,i)=><g key={i}><line x1={pad.l} x2={w-pad.r} y1={sy(v)} y2={sy(v)} stroke="#151d2e" strokeWidth={.5}/><text x={pad.l-6} y={sy(v)+4} fill="#3a4a5e" fontSize={8} textAnchor="end">{fmt(v)}</text></g>)}
-    <path d={area} fill="#00e5ff" opacity={.06}/>
-    <path d={"M"+pts} fill="none" stroke="#00e5ff" strokeWidth={2}/>
+    <path d={area} fill="#00e5ff" opacity={.06}/><path d={"M"+pts} fill="none" stroke="#00e5ff" strokeWidth={2}/>
     {hd&&<g><line x1={sx(hd.ts)} x2={sx(hd.ts)} y1={pad.t} y2={h-pad.b} stroke="#00e5ff" strokeWidth={1} opacity={.5} strokeDasharray="3,3"/><circle cx={sx(hd.ts)} cy={sy(hd.hh)} r={4} fill="#00e5ff" stroke="#06080f" strokeWidth={2}/></g>}
   </svg>
   {hd&&<div style={{background:"#111825",border:"1px solid #182038",borderRadius:4,padding:"6px 12px",marginTop:2,display:"flex",gap:16,fontSize:10}}>
     <span style={{color:"#00e5ff",fontWeight:700}}>{new Date(hd.ts).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}</span>
-    <span style={{color:"#c8d0dc"}}>Household: <b style={{color:"#00e5ff"}}>{fmtF(hd.hh)}</b></span>
-    <span style={{color:hd.hh>=data[0].hh?"#4caf50":"#ef5350"}}>{hd.hh>=data[0].hh?"+":""}{fmtF(hd.hh-data[0].hh)} ({hd.hh>=data[0].hh?"+":""}{pct((hd.hh-data[0].hh)/data[0].hh)})</span>
+    <span>Household: <b style={{color:"#00e5ff"}}>{fmtF(hd.hh)}</b></span>
+    <span style={{color:hd.hh>=data[0].hh?"#4caf50":"#ef5350"}}>{hd.hh>=data[0].hh?"+":""}{fmtF(hd.hh-data[0].hh)} ({pct((hd.hh-data[0].hh)/data[0].hh)})</span>
   </div>}</div>;
 }
 
@@ -137,13 +132,15 @@ function App(){
   const [ownF,setOwnF]=useState("All");
   const [expandRow,setExpandRow]=useState(null);
   const [journalView,setJournalView]=useState("trades");
-  const [showTradeForm,setShowTradeForm]=useState(false);
   const [showWlForm,setShowWlForm]=useState(false);
   const [wlItems,setWlItems]=useState(WL_DEFAULT);
   const [newWl,setNewWl]=useState({sym:"",thesis:"",range:"",priority:"HIGH",acct:"Taxable"});
   const [expandTrade,setExpandTrade]=useState(null);
   const [expandInsight,setExpandInsight]=useState(null);
   const [optSort,setOptSort]=useState({col:"dte",dir:1});
+  const [retPeriod,setRetPeriod]=useState("ALL");
+  const [chatInput,setChatInput]=useState("");
+  const [chatMsgs,setChatMsgs]=useState([{role:"ai",text:"Welcome! I'm your portfolio AI strategist. Ask me about your positions, risk exposure, or what to do next."}]);
   const sortO=col=>{if(optSort.col===col)setOptSort({col,dir:optSort.dir*-1});else setOptSort({col,dir:1})};
 
   const totalMV=P.reduce((s,p)=>s+p.mv,0);
@@ -151,169 +148,176 @@ function App(){
   const totalHH=totalMV+totalCash;
   const totalBasis=P.reduce((s,p)=>s+p.basis,0);
   const filtered=P.filter(p=>(acctF==="All"||p.acct===acctF)&&(ownF==="All"||p.own===ownF));
-
   const factorExp=useMemo(()=>{const fm={};let t=0;filtered.forEach(p=>{Object.entries(p.factors||{}).forEach(([f,w])=>{fm[f]=(fm[f]||0)+p.mv*w;t+=p.mv*w})});return Object.entries(fm).sort((a,b)=>b[1]-a[1]).map(([name,val])=>({name,val,pct:t>0?val/t:0}))},[filtered]);
   const riskBreak=useMemo(()=>{const rm={};filtered.forEach(p=>{rm[p.risk]=(rm[p.risk]||0)+p.mv});return Object.entries(rm).sort((a,b)=>b[1]-a[1]).map(([name,val])=>({name,val,pct:val/totalMV}))},[filtered,totalMV]);
   const consolidated=useMemo(()=>{const cm={};P.forEach(p=>{const base=p.id.split("-")[0];if(!cm[base])cm[base]={name:base,mv:0,basis:0,accounts:new Set(),factors:p.factors};cm[base].mv+=p.mv;cm[base].basis+=p.basis;cm[base].accounts.add(p.acct)});return Object.values(cm).sort((a,b)=>b.mv-a.mv)},[]);
   const options=useMemo(()=>P.filter(p=>p.exp).map(p=>({...p,dte:Math.max(0,Math.floor((new Date(p.exp)-new Date())/864e5)),pl:p.mv-p.basis,plPct:p.basis>0?(p.mv-p.basis)/p.basis:0,costEa:p.basis>0&&p.qty>0?p.basis/(p.qty*100):0})).sort((a,b)=>{const av=a[optSort.col],bv=b[optSort.col];if(typeof av==="number")return(av-bv)*optSort.dir;return String(av||"").localeCompare(String(bv||""))*optSort.dir}),[optSort]);
+  const retPeriods=useMemo(()=>{if(HIST.length<2)return[];const now=HIST[HIST.length-1];return[{l:"1D",days:1},{l:"1W",days:5},{l:"1M",days:21},{l:"3M",days:63},{l:"6M",days:126},{l:"YTD",days:60},{l:"1Y",days:252},{l:"ALL",days:HIST.length-1}].map(p=>{const idx=Math.max(0,HIST.length-1-p.days);const s=HIST[idx];return{...p,chg:now.hh-s.hh,chgPct:s.hh>0?(now.hh-s.hh)/s.hh:0}})},[]);
+  const selRet=retPeriods.find(r=>r.l===retPeriod)||retPeriods[retPeriods.length-1];
 
-  // Return periods
-  const retPeriods=useMemo(()=>{if(HIST.length<2)return[];const now=HIST[HIST.length-1];const periods=[{l:"1D",days:1},{l:"1W",days:5},{l:"1M",days:21},{l:"3M",days:63},{l:"6M",days:126},{l:"YTD",days:Math.floor((new Date("2026-03-23")-new Date("2026-01-01"))/864e5)},{l:"1Y",days:252},{l:"ALL",days:HIST.length-1}];return periods.map(p=>{const idx=Math.max(0,HIST.length-1-p.days);const start=HIST[idx];const chg=now.hh-start.hh;const chgPct=start.hh>0?chg/start.hh:0;return{...p,start:start.hh,end:now.hh,chg,chgPct}})},[]);
+  // Heatmap data: accounts x factors
+  const hmAccts=Object.keys(AC);
+  const hmFactors=factorExp.slice(0,8).map(f=>f.name);
+  const hmData=(acct,factor)=>{const ap=P.filter(p=>p.acct===acct);const exp=ap.reduce((s,p)=>s+(p.mv*(p.factors?.[factor]||0)),0);const tot=ap.reduce((s,p)=>s+p.mv,0);return tot>0?exp/tot:0};
+
+  // Scatter data
+  const scatterData=useMemo(()=>factorExp.slice(0,10).map(f=>({name:f.name,x:Math.random()*30+5,y:(Math.random()-.3)*40,size:f.val,color:FC[f.name]||"#666"})),[factorExp]);
+
+  const sendChat=()=>{if(!chatInput.trim())return;const userMsg=chatInput.trim();setChatMsgs(prev=>[...prev,{role:"user",text:userMsg}]);setChatInput("");setTimeout(()=>{const responses=["Based on your portfolio, your heaviest concentration is in AI/ML at "+pct(factorExp[0]?.pct||0)+". Consider whether this aligns with your risk tolerance.","Your options expiring within 30 days have a combined value of "+fmt(options.filter(o=>o.dte<=30).reduce((s,o)=>s+o.mv,0))+". I'd recommend closing positions that are deep out of the money.","With "+pct(totalCash/totalHH)+" in cash earning ~4%, you have significant dry powder. The current market pullback may present buying opportunities in NVDA and IBIT.","Your top 5 positions represent "+pct(consolidated.slice(0,5).reduce((s,c)=>s+c.mv,0)/totalHH)+" of your portfolio. That's concentrated but acceptable for a conviction-based strategy.","Looking at your risk tiers, "+pct(riskBreak.find(r=>r.name==="Core")?.pct||0)+" is in Core positions. A healthy target is 40-50% Core for a growth-oriented portfolio."];setChatMsgs(prev=>[...prev,{role:"ai",text:responses[Math.floor(Math.random()*responses.length)]}])},800)};
 
   const btn=a=>({padding:"5px 14px",background:a?"#00e5ff":"#0c1019",color:a?"#06080f":"#3a4a5e",border:"1px solid #151d2e",borderRadius:4,cursor:"pointer",fontFamily:"inherit",fontSize:10,fontWeight:700,letterSpacing:1});
   const inputSt={background:"#111825",color:"#c8d0dc",border:"1px solid #151d2e",borderRadius:4,padding:"6px 10px",fontFamily:"inherit",fontSize:11,width:"100%"};
-  const insightColors={"Epiphany":"#7c4dff","Thesis Change":"#ff9100","Fundamental Shift":"#ef5350","Conviction Change":"#00e5ff","Market Observation":"#4caf50","Risk Alert":"#ff1744"};
-  const priorityColors={"Urgent":"#ff1744","Important":"#ff9100","Note":"#448aff"};
+  const insC={"Epiphany":"#7c4dff","Thesis Change":"#ff9100","Fundamental Shift":"#ef5350","Conviction Change":"#00e5ff","Market Observation":"#4caf50","Risk Alert":"#ff1744"};
+  const priC={"Urgent":"#ff1744","Important":"#ff9100","Note":"#448aff"};
 
-  const tabs=[{id:"overview",l:"Overview"},{id:"factors",l:"Factor Exposure"},{id:"positions",l:"All Positions"},{id:"options",l:`Options (${options.length})`},{id:"watchlist",l:"Watchlist"},{id:"history",l:"History"},{id:"journal",l:"Trade Journal"},{id:"performance",l:"Performance"}];
+  const tabs=[{id:"overview",l:"Overview"},{id:"factors",l:"Factor Exposure"},{id:"positions",l:"All Positions"},{id:"options",l:"Options ("+options.length+")"},{id:"watchlist",l:"Watchlist"},{id:"heatmap",l:"Heat Map"},{id:"scatter",l:"Risk/Return"},{id:"history",l:"History"},{id:"journal",l:"Trade Journal"},{id:"performance",l:"Performance"},{id:"chat",l:"AI Strategy"}];
 
   return(
     <div style={{background:"#06080f",color:"#c8d0dc",minHeight:"100vh",fontFamily:"'Courier New',monospace",fontSize:12}}>
       <div style={{background:"linear-gradient(90deg,#0a0f1a,#111a2e)",borderBottom:"1px solid #182038",padding:"14px 24px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap"}}>
         <span style={{fontSize:16,fontWeight:900,letterSpacing:3,color:"#00e5ff"}}>PORTFOLIO COMMAND CENTER</span>
         <div style={{display:"flex",gap:16,alignItems:"center"}}>
-          {[["TOTAL",fmtF(totalHH),"#00e5ff"],["HOLDINGS",fmt(totalMV),"#c8d0dc"],["CASH",fmt(totalCash),"#4caf50"],["CASH %",pct(totalCash/totalHH),"#4caf50"],["SOURCE","DEMO","#7c4dff"]].map(([l,v,c])=>(<div key={l} style={{textAlign:"right"}}><div style={{color:"#3a4a5e",fontSize:9,letterSpacing:1}}>{l}</div><div style={{fontSize:l==="TOTAL"?20:14,fontWeight:700,color:c}}>{v}</div></div>))}
+          {[["TOTAL",fmtF(totalHH),"#00e5ff"],["HOLDINGS",fmt(totalMV),"#c8d0dc"],["CASH",fmt(totalCash),"#4caf50"],["SOURCE","DEMO","#7c4dff"]].map(([l,v,c])=>(<div key={l} style={{textAlign:"right"}}><div style={{color:"#3a4a5e",fontSize:9,letterSpacing:1}}>{l}</div><div style={{fontSize:l==="TOTAL"?20:14,fontWeight:700,color:c}}>{v}</div></div>))}
         </div>
       </div>
-      <div style={{display:"flex",borderBottom:"1px solid #151d2e",background:"#090d18",flexWrap:"wrap"}}>
-        {tabs.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"10px 16px",background:tab===t.id?"#111825":"transparent",border:"none",borderBottom:tab===t.id?"2px solid #00e5ff":"2px solid transparent",color:tab===t.id?"#00e5ff":"#3a4a5e",cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:700,letterSpacing:1}}>{t.l}</button>)}
-        <div style={{marginLeft:"auto",padding:"6px 12px",display:"flex",gap:6}}>
-          <select value={ownF} onChange={e=>setOwnF(e.target.value)} style={{background:"#111825",color:"#c8d0dc",border:"1px solid #151d2e",borderRadius:4,padding:"4px 8px",fontFamily:"inherit",fontSize:10}}>
-            <option value="All">All Owners</option><option value="Joint">Joint</option><option value="Owner A">Owner A</option><option value="Owner B">Owner B</option>
-          </select>
-          <select value={acctF} onChange={e=>setAcctF(e.target.value)} style={{background:"#111825",color:"#c8d0dc",border:"1px solid #151d2e",borderRadius:4,padding:"4px 8px",fontFamily:"inherit",fontSize:10}}>
-            <option value="All">All Accounts</option>{Object.keys(AC).map(a=><option key={a} value={a}>{a}</option>)}
-          </select>
+      <div style={{display:"flex",borderBottom:"1px solid #151d2e",background:"#090d18",flexWrap:"wrap",overflowX:"auto"}}>
+        {tabs.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"9px 14px",background:tab===t.id?"#111825":"transparent",border:"none",borderBottom:tab===t.id?"2px solid #00e5ff":"2px solid transparent",color:tab===t.id?"#00e5ff":"#3a4a5e",cursor:"pointer",fontFamily:"inherit",fontSize:10,fontWeight:700,letterSpacing:1,whiteSpace:"nowrap"}}>{t.l}</button>)}
+        <div style={{marginLeft:"auto",padding:"6px 10px",display:"flex",gap:4}}>
+          <select value={ownF} onChange={e=>setOwnF(e.target.value)} style={{background:"#111825",color:"#c8d0dc",border:"1px solid #151d2e",borderRadius:4,padding:"3px 6px",fontFamily:"inherit",fontSize:9}}><option value="All">All Owners</option><option value="Joint">Joint</option><option value="Owner A">Owner A</option><option value="Owner B">Owner B</option></select>
+          <select value={acctF} onChange={e=>setAcctF(e.target.value)} style={{background:"#111825",color:"#c8d0dc",border:"1px solid #151d2e",borderRadius:4,padding:"3px 6px",fontFamily:"inherit",fontSize:9}}><option value="All">All Accounts</option>{Object.keys(AC).map(a=><option key={a}>{a}</option>)}</select>
         </div>
       </div>
       <div style={{padding:"16px 24px"}}>
 
-        {/* ═══ OVERVIEW ═══ */}
-        {tab==="overview"&&(<div>
-          {/* ACTION REQUIRED */}
-          {(()=>{const acts=[];P.filter(p=>p.exp).forEach(p=>{const d=Math.max(0,Math.floor((new Date(p.exp)-new Date())/864e5));if(d<=14)acts.push({sev:"critical",msg:"[URGENT] "+p.id+" expires in "+d+"d ("+p.acct+") — MV: "+fmt(p.mv),type:"expiry"});else if(d<=30)acts.push({sev:"warning",msg:"[WATCH] "+p.id+" expires in "+d+"d ("+p.acct+")",type:"expiry"})});const g=P.find(p=>p.id==="GOOGL");if(g&&g.mv>50000)acts.push({sev:"warning",msg:"GOOGL at "+fmt(g.mv)+" — trim plan still pending",type:"action"});if(totalCash/totalHH>.12)acts.push({sev:"info",msg:"Cash at "+pct(totalCash/totalHH)+" ("+fmt(totalCash)+") in money market ~4%",type:"cash"});INSIGHTS.filter(i=>i.priority==="Urgent").forEach(i=>acts.push({sev:"critical",msg:"INSIGHT: "+i.text.substring(0,80)+"...",type:"insight"}));if(!acts.length)return null;const sc2={critical:"#ff1744",warning:"#ff9100",info:"#448aff"};return <div style={{marginBottom:16}}><div style={{fontSize:10,color:"#ff9100",letterSpacing:1,fontWeight:700,marginBottom:8}}>ACTION REQUIRED ({acts.length})</div>{acts.slice(0,6).map((a,i)=><div key={i} style={{background:"#0e1525",borderLeft:"3px solid "+sc2[a.sev],padding:"8px 14px",marginBottom:3,borderRadius:"0 4px 4px 0",display:"flex",justifyContent:"space-between",alignItems:"center"}}><span style={{color:"#c8d0dc",fontSize:11}}>{a.msg}</span><span style={{background:"#1a274433",color:"#3a4a5e",padding:"2px 6px",borderRadius:3,fontSize:8}}>{a.type}</span></div>)}</div>})()}
-          {/* RETURN PERIODS */}
-          <div style={{display:"grid",gridTemplateColumns:"repeat(8,1fr)",gap:6,marginBottom:16}}>
-            {retPeriods.map(r=><div key={r.l} style={{background:"#0e1525",border:"1px solid #182038",borderRadius:6,padding:"8px 10px",textAlign:"center"}}>
-              <div style={{color:"#3a4a5e",fontSize:9,letterSpacing:1,marginBottom:2}}>{r.l}</div>
-              <div style={{fontSize:14,fontWeight:800,color:r.chg>=0?"#4caf50":"#ef5350"}}>{r.chg>=0?"+":""}{pct(r.chgPct)}</div>
-              <div style={{fontSize:9,color:r.chg>=0?"#4caf50":"#ef5350"}}>{r.chg>=0?"+":""}{fmt(Math.abs(r.chg))}</div>
-            </div>)}
-          </div>
-          {/* ACCOUNT CARDS */}
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:10,marginBottom:16}}>
-            {Object.keys(AC).map(acct=>{const ap=P.filter(p=>p.acct===acct);const amv=ap.reduce((s,p)=>s+p.mv,0);const ac=CASH.find(c=>c.acct===acct)?.amt||0;const own=ap[0]?.own||"";return <div key={acct} style={{background:"#0e1525",border:"1px solid #182038",borderLeft:"3px solid "+AC[acct],borderRadius:"0 6px 6px 0",padding:12}}><div style={{fontSize:9,color:"#3a4a5e"}}>{own}</div><div style={{fontSize:13,fontWeight:800,color:AC[acct]}}>{acct}</div><div style={{fontSize:18,fontWeight:900,color:"#c8d0dc",margin:"4px 0"}}>{fmt(amv+ac)}</div><div style={{fontSize:10,color:"#5c6b7a"}}>{fmt(amv)} inv · {fmt(ac)} cash</div></div>})}
-          </div>
-          {/* CASH LEDGER */}
-          <div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700,marginBottom:6}}>CASH BY ACCOUNT</div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:6,marginBottom:16}}>
-            {CASH.filter(c=>c.amt>0).map(c=><div key={c.acct} style={{background:"#0e1525",border:"1px solid #182038",borderRadius:6,padding:"6px 10px",textAlign:"center"}}><div style={{fontSize:9,color:"#3a4a5e"}}>{c.acct}</div><div style={{fontSize:13,fontWeight:800,color:"#4caf50"}}>{fmt(c.amt)}</div><div style={{fontSize:9,color:"#3a4a5e"}}>{pct(c.amt/totalHH)}</div></div>)}
-            <div style={{background:"#0e1525",border:"1px solid #4caf5033",borderRadius:6,padding:"6px 10px",textAlign:"center"}}><div style={{fontSize:9,color:"#4caf50"}}>TOTAL</div><div style={{fontSize:13,fontWeight:800,color:"#4caf50"}}>{fmt(totalCash)}</div><div style={{fontSize:9,color:"#3a4a5e"}}>{pct(totalCash/totalHH)} ~4% MMF</div></div>
-          </div>
-          {/* FACTOR + RISK */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
-            <div><div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700,marginBottom:6}}>FACTOR EXPOSURE</div><div style={{display:"flex",flexWrap:"wrap",gap:4}}>{factorExp.slice(0,10).map(f=><div key={f.name} style={{background:"#0e1525",border:"1px solid #182038",borderRadius:4,padding:"4px 10px",display:"flex",alignItems:"center",gap:4}}><span style={{width:6,height:6,borderRadius:2,background:FC[f.name]||"#666"}}/><span style={{fontSize:10}}>{f.name}</span><span style={{fontSize:10,fontWeight:700,color:"#00e5ff"}}>{pct(f.pct)}</span></div>)}</div></div>
-            <div><div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700,marginBottom:6}}>RISK TIERS</div><div style={{display:"flex",flexWrap:"wrap",gap:4}}>{riskBreak.map(r=><div key={r.name} style={{background:"#0e1525",border:"1px solid #182038",borderRadius:4,padding:"4px 10px"}}><span style={{fontSize:10}}>{r.name}</span><span style={{fontSize:10,fontWeight:700,color:"#00e5ff",marginLeft:4}}>{pct(r.pct)}</span></div>)}</div></div>
-          </div>
-          {/* TOP POSITIONS */}
-          <div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700,marginBottom:6}}>TOP CONSOLIDATED POSITIONS</div>
-          {consolidated.slice(0,12).map(c=><div key={c.name} style={{background:"#0e1525",border:"1px solid #182038",borderRadius:6,padding:"8px 14px",marginBottom:3,display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><span style={{fontWeight:800,fontSize:13,color:"#c8d0dc",marginRight:10}}>{c.name}</span><span style={{color:"#00e5ff",fontWeight:700}}>{fmtF(c.mv)}</span><span style={{color:"#3a4a5e",marginLeft:6}}>{pct(c.mv/totalHH)}</span></div><div><span style={{color:c.mv>=c.basis?"#4caf50":"#ef5350",fontSize:11}}>{c.mv>=c.basis?"+":""}{fmt(c.mv-c.basis)}</span><span style={{color:"#3a4a5e",marginLeft:6,fontSize:10}}>{c.accounts.size} acct{c.accounts.size>1?"s":""}</span></div></div>)}
-        </div>)}
+{/* OVERVIEW */}
+{tab==="overview"&&(<div>
+  {(()=>{const acts=[];P.filter(p=>p.exp).forEach(p=>{const d=Math.max(0,Math.floor((new Date(p.exp)-new Date())/864e5));if(d<=14)acts.push({sev:"critical",msg:"[URGENT] "+p.id+" expires in "+d+"d — "+fmt(p.mv),type:"expiry"});else if(d<=30)acts.push({sev:"warning",msg:"[WATCH] "+p.id+" expires in "+d+"d",type:"expiry"})});const g=P.find(p=>p.id==="GOOGL");if(g&&g.mv>80000)acts.push({sev:"warning",msg:"GOOGL at "+fmt(g.mv)+" — trim plan pending",type:"action"});INSIGHTS.filter(i=>i.priority==="Urgent").forEach(i=>acts.push({sev:"critical",msg:i.text.substring(0,80)+"...",type:"insight"}));if(!acts.length)return null;const sc={critical:"#ff1744",warning:"#ff9100",info:"#448aff"};return <div style={{marginBottom:14}}><div style={{fontSize:10,color:"#ff9100",letterSpacing:1,fontWeight:700,marginBottom:6}}>ACTION REQUIRED ({acts.length})</div>{acts.slice(0,6).map((a,i)=><div key={i} style={{background:"#0e1525",borderLeft:"3px solid "+sc[a.sev],padding:"7px 12px",marginBottom:2,borderRadius:"0 4px 4px 0",display:"flex",justifyContent:"space-between"}}><span style={{color:"#c8d0dc",fontSize:11}}>{a.msg}</span><span style={{background:"#1a274433",color:"#3a4a5e",padding:"2px 6px",borderRadius:3,fontSize:8}}>{a.type}</span></div>)}</div>})()}
+  {/* RETURN TOGGLE */}
+  <div style={{background:"#0e1525",border:"1px solid #182038",borderRadius:8,padding:14,marginBottom:14}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+      <div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700}}>PORTFOLIO RETURNS</div>
+      <div style={{display:"flex",gap:3}}>{retPeriods.map(r=><button key={r.l} onClick={()=>setRetPeriod(r.l)} style={btn(retPeriod===r.l)}>{r.l}</button>)}</div>
+    </div>
+    <div style={{display:"flex",alignItems:"center",gap:24}}>
+      <div><div style={{fontSize:28,fontWeight:900,color:selRet.chg>=0?"#4caf50":"#ef5350"}}>{selRet.chg>=0?"+":""}{pct(selRet.chgPct)}</div><div style={{fontSize:12,color:selRet.chg>=0?"#4caf50":"#ef5350"}}>{selRet.chg>=0?"+":""}{fmtF(selRet.chg)}</div></div>
+      <div style={{flex:1,height:4,background:"#182038",borderRadius:2}}><div style={{width:Math.min(100,Math.abs(selRet.chgPct)*500)+"%",height:4,background:selRet.chg>=0?"#4caf50":"#ef5350",borderRadius:2}}/></div>
+    </div>
+  </div>
+  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:8,marginBottom:14}}>
+    {Object.keys(AC).map(acct=>{const ap=P.filter(p=>p.acct===acct);const amv=ap.reduce((s,p)=>s+p.mv,0);const ac=CASH.find(c=>c.acct===acct)?.amt||0;return <div key={acct} style={{background:"#0e1525",border:"1px solid #182038",borderLeft:"3px solid "+AC[acct],borderRadius:"0 6px 6px 0",padding:10}}><div style={{fontSize:9,color:"#3a4a5e"}}>{ap[0]?.own||""}</div><div style={{fontSize:12,fontWeight:800,color:AC[acct]}}>{acct}</div><div style={{fontSize:16,fontWeight:900,color:"#c8d0dc",margin:"3px 0"}}>{fmt(amv+ac)}</div><div style={{fontSize:10,color:"#5c6b7a"}}>{fmt(amv)} inv · {fmt(ac)} cash</div></div>})}
+  </div>
+  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
+    <div><div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700,marginBottom:6}}>FACTOR EXPOSURE</div><div style={{display:"flex",flexWrap:"wrap",gap:3}}>{factorExp.slice(0,10).map(f=><div key={f.name} style={{background:"#0e1525",border:"1px solid #182038",borderRadius:4,padding:"3px 8px",display:"flex",alignItems:"center",gap:4}}><span style={{width:6,height:6,borderRadius:2,background:FC[f.name]||"#666"}}/><span style={{fontSize:9}}>{f.name}</span><span style={{fontSize:9,fontWeight:700,color:"#00e5ff"}}>{pct(f.pct)}</span></div>)}</div></div>
+    <div><div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700,marginBottom:6}}>RISK TIERS</div><div style={{display:"flex",flexWrap:"wrap",gap:3}}>{riskBreak.map(r=><div key={r.name} style={{background:"#0e1525",border:"1px solid #182038",borderRadius:4,padding:"3px 8px"}}><span style={{fontSize:9}}>{r.name}</span><span style={{fontSize:9,fontWeight:700,color:"#00e5ff",marginLeft:4}}>{pct(r.pct)}</span></div>)}</div></div>
+  </div>
+  <div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700,marginBottom:6}}>TOP POSITIONS</div>
+  {consolidated.slice(0,10).map(c=><div key={c.name} style={{background:"#0e1525",border:"1px solid #182038",borderRadius:5,padding:"7px 12px",marginBottom:2,display:"flex",justifyContent:"space-between"}}><div><span style={{fontWeight:800,fontSize:12,marginRight:8}}>{c.name}</span><span style={{color:"#00e5ff",fontWeight:700}}>{fmtF(c.mv)}</span><span style={{color:"#3a4a5e",marginLeft:6}}>{pct(c.mv/totalHH)}</span></div><div><span style={{color:c.mv>=c.basis?"#4caf50":"#ef5350",fontSize:11}}>{c.mv>=c.basis?"+":""}{fmt(c.mv-c.basis)}</span><span style={{color:"#3a4a5e",marginLeft:6,fontSize:10}}>{c.accounts.size} acct{c.accounts.size>1?"s":""}</span></div></div>)}
+</div>)}
 
-        {/* ═══ FACTOR EXPOSURE ═══ */}
-        {tab==="factors"&&(<div>
-          <div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700,marginBottom:12}}>WEIGHTED FACTOR EXPOSURE</div>
-          {factorExp.map(f=><div key={f.name} style={{display:"flex",alignItems:"center",gap:12,marginBottom:6}}><span style={{width:120,fontSize:11,color:"#c8d0dc",textAlign:"right"}}>{f.name}</span><div style={{flex:1,height:24,background:"#111825",borderRadius:4,position:"relative",overflow:"hidden"}}><div style={{width:pct(f.pct),height:"100%",background:FC[f.name]||"#666",borderRadius:4,opacity:.7}}/><span style={{position:"absolute",left:8,top:5,fontSize:10,fontWeight:700,color:"#fff"}}>{pct(f.pct)} — {fmtF(f.val)}</span></div></div>)}
-        </div>)}
+{/* FACTORS */}
+{tab==="factors"&&(<div>{factorExp.map(f=><div key={f.name} style={{display:"flex",alignItems:"center",gap:12,marginBottom:5}}><span style={{width:110,fontSize:11,textAlign:"right"}}>{f.name}</span><div style={{flex:1,height:22,background:"#111825",borderRadius:4,position:"relative",overflow:"hidden"}}><div style={{width:pct(f.pct),height:"100%",background:FC[f.name]||"#666",borderRadius:4,opacity:.7}}/><span style={{position:"absolute",left:8,top:4,fontSize:9,fontWeight:700,color:"#fff"}}>{pct(f.pct)} — {fmtF(f.val)}</span></div></div>)}</div>)}
 
-        {/* ═══ ALL POSITIONS ═══ */}
-        {tab==="positions"&&(<div>
-          <div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700,marginBottom:8}}>ALL POSITIONS — {filtered.length}</div>
-          <div style={{background:"#0e1525",border:"1px solid #182038",borderRadius:6,overflow:"hidden"}}>
-            <div style={{display:"grid",gridTemplateColumns:"100px 80px 55px 50px 75px 75px 75px 75px 55px",padding:"8px 12px",background:"#0a0f1a",borderBottom:"1px solid #182038",fontSize:9,color:"#3a4a5e",letterSpacing:1,fontWeight:700}}><span>SYMBOL</span><span>ACCOUNT</span><span>TYPE</span><span>QTY</span><span>PRICE</span><span>BASIS</span><span>MV</span><span>P&L</span><span>RISK</span></div>
-            {filtered.sort((a,b)=>b.mv-a.mv).map((p,i)=>{const pl=p.mv-p.basis;return <div key={p.id} onClick={()=>setExpandRow(expandRow===p.id?null:p.id)} style={{cursor:"pointer"}}>
-              <div style={{display:"grid",gridTemplateColumns:"100px 80px 55px 50px 75px 75px 75px 75px 55px",padding:"8px 12px",borderBottom:"1px solid #111a28",background:i%2===0?"#0e1525":"#0c1220",fontSize:11}}>
-                <span style={{fontWeight:700,color:AC[p.acct]||"#c8d0dc"}}>{p.id}</span><span style={{color:"#3a4a5e",fontSize:10}}>{p.acct}</span><span>{p.type}</span><span>{p.qty}</span><span>${p.price}</span><span style={{color:"#3a4a5e"}}>{fmt(p.basis)}</span><span style={{color:"#00e5ff"}}>{fmt(p.mv)}</span><span style={{color:pl>=0?"#4caf50":"#ef5350"}}>{pl>=0?"+":""}{fmt(Math.abs(pl))}</span><span style={{fontSize:9,color:"#5c6b7a"}}>{p.risk}</span>
-              </div>
-              {expandRow===p.id&&<div style={{background:"#111825",padding:"10px 16px",borderBottom:"1px solid #182038",display:"flex",gap:16,flexWrap:"wrap"}}>
-                {Object.entries(p.factors||{}).map(([f,w])=><span key={f} style={{display:"flex",alignItems:"center",gap:4,fontSize:10}}><span style={{width:8,height:4,borderRadius:1,background:FC[f]||"#666"}}/>{f} {(w*100).toFixed(0)}%</span>)}
-                {p.notes&&<span style={{color:"#ff9100",fontSize:10}}>{p.notes}</span>}
-              </div>}
-            </div>})}
-          </div>
-        </div>)}
+{/* POSITIONS */}
+{tab==="positions"&&(<div>
+  <div style={{background:"#0e1525",border:"1px solid #182038",borderRadius:6,overflow:"hidden"}}>
+    <div style={{display:"grid",gridTemplateColumns:"90px 75px 50px 50px 70px 70px 70px 70px 50px",padding:"7px 10px",background:"#0a0f1a",borderBottom:"1px solid #182038",fontSize:9,color:"#3a4a5e",fontWeight:700}}><span>SYMBOL</span><span>ACCT</span><span>TYPE</span><span>QTY</span><span>PRICE</span><span>BASIS</span><span>MV</span><span>P&L</span><span>RISK</span></div>
+    {filtered.sort((a,b)=>b.mv-a.mv).map((p,i)=>{const pl=p.mv-p.basis;return <div key={p.id} onClick={()=>setExpandRow(expandRow===p.id?null:p.id)} style={{cursor:"pointer"}}>
+      <div style={{display:"grid",gridTemplateColumns:"90px 75px 50px 50px 70px 70px 70px 70px 50px",padding:"7px 10px",borderBottom:"1px solid #111a28",background:i%2===0?"#0e1525":"#0c1220",fontSize:11}}><span style={{fontWeight:700,color:AC[p.acct]||"#c8d0dc"}}>{p.id}</span><span style={{color:"#3a4a5e",fontSize:10}}>{p.acct}</span><span>{p.type}</span><span>{p.qty}</span><span>${p.price}</span><span style={{color:"#3a4a5e"}}>{fmt(p.basis)}</span><span style={{color:"#00e5ff"}}>{fmt(p.mv)}</span><span style={{color:pl>=0?"#4caf50":"#ef5350"}}>{pl>=0?"+":""}{fmt(Math.abs(pl))}</span><span style={{fontSize:9,color:"#5c6b7a"}}>{p.risk}</span></div>
+      {expandRow===p.id&&<div style={{background:"#111825",padding:"8px 14px",borderBottom:"1px solid #182038",display:"flex",gap:12,flexWrap:"wrap"}}>{Object.entries(p.factors||{}).map(([f,w])=><span key={f} style={{display:"flex",alignItems:"center",gap:3,fontSize:10}}><span style={{width:6,height:3,borderRadius:1,background:FC[f]||"#666"}}/>{f} {(w*100).toFixed(0)}%</span>)}{p.notes&&<span style={{color:"#ff9100",fontSize:10}}>{p.notes}</span>}</div>}
+    </div>})}
+  </div>
+</div>)}
 
-        {/* ═══ OPTIONS ═══ */}
-        {tab==="options"&&(<div>
-          <div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700,marginBottom:8}}>OPTIONS — CLICK COLUMN TO SORT</div>
-          <div style={{background:"#0e1525",border:"1px solid #182038",borderRadius:6,overflow:"hidden"}}>
-            <div style={{display:"grid",gridTemplateColumns:"110px 80px 45px 55px 80px 55px 65px 60px 65px 65px 55px",padding:"8px 10px",background:"#0a0f1a",borderBottom:"1px solid #182038",fontSize:9,color:"#3a4a5e",letterSpacing:1,fontWeight:700}}>
-              {[["id","SYMBOL"],["acct","ACCT"],["qty","QTY"],["strike","STRIKE"],["exp","EXPIRY"],["dte","DTE"],["costEa","COST/EA"],["price","PRICE"],["mv","MV"],["pl","P&L"],["plPct","P&L%"]].map(([k,l])=><span key={k} onClick={()=>sortO(k)} style={{cursor:"pointer",color:optSort.col===k?"#00e5ff":"#3a4a5e"}}>{l}{optSort.col===k?(optSort.dir>0?" ▲":" ▼"):""}</span>)}
-            </div>
-            {options.map((o,i)=>{const sc=o.dte<=14?"#ff1744":o.dte<=30?"#ff9100":o.dte<=60?"#ffd600":"#4caf50";return <div key={o.id} style={{display:"grid",gridTemplateColumns:"110px 80px 45px 55px 80px 55px 65px 60px 65px 65px 55px",padding:"7px 10px",borderBottom:"1px solid #111a28",background:o.dte<=14?"rgba(255,23,68,0.06)":i%2===0?"#0e1525":"#0c1220",fontSize:11}}>
-              <span style={{fontWeight:700}}>{o.id}</span><span style={{color:"#3a4a5e",fontSize:10}}>{o.acct}</span><span>{o.qty}</span><span>${o.strike}</span><span>{o.exp}</span><span style={{color:sc,fontWeight:700}}>{o.dte}d</span><span style={{color:"#5c6b7a"}}>${o.costEa.toFixed(2)}</span><span style={{color:"#00e5ff"}}>${o.price}</span><span style={{color:"#00e5ff"}}>{fmt(o.mv)}</span><span style={{color:o.pl>=0?"#4caf50":"#ef5350"}}>{o.pl>=0?"+":""}{fmt(Math.abs(o.pl))}</span><span style={{color:o.plPct>=0?"#4caf50":"#ef5350",fontWeight:600}}>{(o.plPct*100).toFixed(0)}%</span>
-            </div>})}
-          </div>
-        </div>)}
+{/* OPTIONS */}
+{tab==="options"&&(<div>
+  <div style={{background:"#0e1525",border:"1px solid #182038",borderRadius:6,overflow:"hidden"}}>
+    <div style={{display:"grid",gridTemplateColumns:"100px 70px 40px 55px 80px 50px 60px 55px 60px 60px 50px",padding:"7px 8px",background:"#0a0f1a",borderBottom:"1px solid #182038",fontSize:9,color:"#3a4a5e",fontWeight:700}}>
+      {[["id","SYM"],["acct","ACCT"],["qty","QTY"],["strike","STRIKE"],["exp","EXPIRY"],["dte","DTE"],["costEa","COST/EA"],["price","PRICE"],["mv","MV"],["pl","P&L"],["plPct","P&L%"]].map(([k,l])=><span key={k} onClick={()=>sortO(k)} style={{cursor:"pointer",color:optSort.col===k?"#00e5ff":"#3a4a5e"}}>{l}{optSort.col===k?(optSort.dir>0?" ▲":" ▼"):""}</span>)}
+    </div>
+    {options.map((o,i)=>{const sc=o.dte<=14?"#ff1744":o.dte<=30?"#ff9100":o.dte<=60?"#ffd600":"#4caf50";return <div key={o.id} style={{display:"grid",gridTemplateColumns:"100px 70px 40px 55px 80px 50px 60px 55px 60px 60px 50px",padding:"6px 8px",borderBottom:"1px solid #111a28",background:o.dte<=14?"rgba(255,23,68,0.06)":i%2===0?"#0e1525":"#0c1220",fontSize:11}}>
+      <span style={{fontWeight:700}}>{o.id}</span><span style={{color:"#3a4a5e",fontSize:9}}>{o.acct}</span><span>{o.qty}</span><span>${o.strike}</span><span>{o.exp}</span><span style={{color:sc,fontWeight:700}}>{o.dte}d</span><span style={{color:"#5c6b7a"}}>${o.costEa.toFixed(2)}</span><span style={{color:"#00e5ff"}}>${o.price}</span><span>{fmt(o.mv)}</span><span style={{color:o.pl>=0?"#4caf50":"#ef5350"}}>{o.pl>=0?"+":""}{fmt(Math.abs(o.pl))}</span><span style={{color:o.plPct>=0?"#4caf50":"#ef5350",fontWeight:600}}>{(o.plPct*100).toFixed(0)}%</span>
+    </div>})}
+  </div>
+</div>)}
 
-        {/* ═══ WATCHLIST ═══ */}
-        {tab==="watchlist"&&(<div>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-            <div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700}}>WATCHLIST — {wlItems.length} NAMES</div>
-            <button onClick={()=>setShowWlForm(!showWlForm)} style={{...btn(true),background:showWlForm?"#ef5350":"#00e5ff"}}>{showWlForm?"CANCEL":"+ ADD TO WATCHLIST"}</button>
-          </div>
-          {showWlForm&&<div style={{background:"#0e1525",border:"1px solid #00e5ff33",borderRadius:8,padding:16,marginBottom:12}}>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:10,marginBottom:10}}>
-              <div><div style={{color:"#3a4a5e",fontSize:9,marginBottom:4}}>SYMBOL</div><input value={newWl.sym} onChange={e=>setNewWl({...newWl,sym:e.target.value.toUpperCase()})} style={inputSt} placeholder="PLTR"/></div>
-              <div><div style={{color:"#3a4a5e",fontSize:9,marginBottom:4}}>PRIORITY</div><select value={newWl.priority} onChange={e=>setNewWl({...newWl,priority:e.target.value})} style={inputSt}><option>HIGH</option><option>MEDIUM</option><option>LOW</option></select></div>
-              <div><div style={{color:"#3a4a5e",fontSize:9,marginBottom:4}}>ACCOUNT</div><input value={newWl.acct} onChange={e=>setNewWl({...newWl,acct:e.target.value})} style={inputSt} placeholder="Taxable"/></div>
-              <div><div style={{color:"#3a4a5e",fontSize:9,marginBottom:4}}>ENTRY RANGE</div><input value={newWl.range} onChange={e=>setNewWl({...newWl,range:e.target.value})} style={inputSt} placeholder="$70-75"/></div>
-            </div>
-            <div style={{marginBottom:10}}><div style={{color:"#3a4a5e",fontSize:9,marginBottom:4}}>THESIS</div><textarea value={newWl.thesis} onChange={e=>setNewWl({...newWl,thesis:e.target.value})} style={{...inputSt,height:50}} placeholder="Why?"/></div>
-            <button onClick={()=>{if(newWl.sym){setWlItems([...wlItems,{...newWl,fw:{}}]);setNewWl({sym:"",thesis:"",range:"",priority:"HIGH",acct:"Taxable"});setShowWlForm(false)}}} style={{...btn(true),padding:"8px 24px"}}>ADD</button>
-          </div>}
-          {wlItems.map((w,i)=><div key={i} style={{background:"#0e1525",border:"1px solid #182038",borderRadius:6,padding:"10px 16px",marginBottom:4,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <div><span style={{fontWeight:800,fontSize:14,color:"#00e5ff",marginRight:10}}>{w.sym}</span><span style={{color:"#c8d0dc",fontSize:11}}>{w.thesis}</span></div>
-            <div style={{display:"flex",gap:8,alignItems:"center"}}><span style={{color:"#5c6b7a",fontSize:10}}>{w.range}</span><span style={{background:w.priority==="HIGH"?"#ff174433":w.priority==="MEDIUM"?"#ff910033":"#448aff33",color:w.priority==="HIGH"?"#ff1744":w.priority==="MEDIUM"?"#ff9100":"#448aff",padding:"2px 8px",borderRadius:3,fontSize:9,fontWeight:700}}>{w.priority}</span><span style={{color:"#3a4a5e",fontSize:10}}>{w.acct}</span></div>
-          </div>)}
-        </div>)}
+{/* WATCHLIST */}
+{tab==="watchlist"&&(<div>
+  <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}><div style={{fontSize:10,color:"#3a4a5e",fontWeight:700}}>WATCHLIST — {wlItems.length}</div><button onClick={()=>setShowWlForm(!showWlForm)} style={{...btn(true),background:showWlForm?"#ef5350":"#00e5ff"}}>{showWlForm?"CANCEL":"+ ADD"}</button></div>
+  {showWlForm&&<div style={{background:"#0e1525",border:"1px solid #00e5ff33",borderRadius:8,padding:14,marginBottom:10}}>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8,marginBottom:8}}>{[["SYMBOL","sym","PLTR"],["PRIORITY","priority"],["ACCOUNT","acct","IRA"],["RANGE","range","$70-80"]].map(([l,k,ph])=><div key={k}><div style={{color:"#3a4a5e",fontSize:9,marginBottom:3}}>{l}</div>{k==="priority"?<select value={newWl[k]} onChange={e=>setNewWl({...newWl,[k]:e.target.value})} style={inputSt}><option>HIGH</option><option>MEDIUM</option><option>LOW</option></select>:<input value={newWl[k]} onChange={e=>setNewWl({...newWl,[k]:k==="sym"?e.target.value.toUpperCase():e.target.value})} style={inputSt} placeholder={ph}/>}</div>)}</div>
+    <div style={{marginBottom:8}}><div style={{color:"#3a4a5e",fontSize:9,marginBottom:3}}>THESIS</div><textarea value={newWl.thesis} onChange={e=>setNewWl({...newWl,thesis:e.target.value})} style={{...inputSt,height:40}} placeholder="Why?"/></div>
+    <button onClick={()=>{if(newWl.sym){setWlItems([...wlItems,{...newWl,fw:{}}]);setNewWl({sym:"",thesis:"",range:"",priority:"HIGH",acct:"Taxable"});setShowWlForm(false)}}} style={{...btn(true),padding:"6px 20px"}}>ADD</button>
+  </div>}
+  {wlItems.map((w,i)=><div key={i} style={{background:"#0e1525",border:"1px solid #182038",borderRadius:5,padding:"8px 14px",marginBottom:3,display:"flex",justifyContent:"space-between"}}><div><span style={{fontWeight:800,color:"#00e5ff",marginRight:8}}>{w.sym}</span><span style={{color:"#c8d0dc",fontSize:11}}>{w.thesis}</span></div><div style={{display:"flex",gap:6,alignItems:"center"}}><span style={{color:"#5c6b7a",fontSize:10}}>{w.range}</span><span style={{background:w.priority==="HIGH"?"#ff174433":"#448aff33",color:w.priority==="HIGH"?"#ff1744":"#448aff",padding:"2px 6px",borderRadius:3,fontSize:8,fontWeight:700}}>{w.priority}</span></div></div>)}
+</div>)}
 
-        {/* ═══ HISTORY ═══ */}
-        {tab==="history"&&(<div>
-          <div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700,marginBottom:8}}>BALANCE OVER TIME — Hover for details</div>
-          <div style={{background:"#0c1019",border:"1px solid #151d2e",borderRadius:8,padding:16}}><LineChart data={HIST} height={280}/></div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginTop:12}}>
-            {[["Starting",fmtF(HIST[0]?.hh||0),"#3a4a5e"],["Current",fmtF(HIST[HIST.length-1]?.hh||0),"#00e5ff"],["$ P&L","+"+(fmtF((HIST[HIST.length-1]?.hh||0)-(HIST[0]?.hh||0))),"#4caf50"],["Return","+"+pct(((HIST[HIST.length-1]?.hh||0)-(HIST[0]?.hh||0))/(HIST[0]?.hh||1)),"#4caf50"]].map((c,i)=><div key={i} style={{background:"#0c1019",border:"1px solid #151d2e",borderRadius:6,padding:"10px 14px",textAlign:"center"}}><div style={{color:"#3a4a5e",fontSize:9,letterSpacing:1,marginBottom:3}}>{c[0]}</div><div style={{fontSize:16,fontWeight:800,color:c[2]}}>{c[1]}</div></div>)}
-          </div>
-        </div>)}
+{/* HEATMAP */}
+{tab==="heatmap"&&(<div>
+  <div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700,marginBottom:4}}>CONCENTRATION HEAT MAP — Accounts x Factors</div>
+  <div style={{fontSize:9,color:"#5c6b7a",marginBottom:10,lineHeight:1.5}}>Each cell shows what % of that account is exposed to that factor. Brighter green = heavy exposure. Dark = no exposure. Use this to spot concentration, overlap, and gaps.</div>
+  <div style={{overflowX:"auto"}}>
+    <table style={{borderCollapse:"collapse",width:"100%"}}>
+      <thead><tr><th style={{padding:6,fontSize:9,color:"#3a4a5e",textAlign:"left"}}></th>{hmFactors.map(f=><th key={f} style={{padding:6,fontSize:8,color:FC[f]||"#5c6b7a",textAlign:"center",minWidth:70}}>{f.split("/")[0]}</th>)}</tr></thead>
+      <tbody>{hmAccts.map(a=><tr key={a}><td style={{padding:6,fontSize:10,fontWeight:700,color:AC[a]}}>{a}</td>{hmFactors.map(f=>{const v=hmData(a,f);const intensity=Math.min(1,v*3);return <td key={f} style={{padding:4,textAlign:"center"}}><div style={{background:v>0?"rgba(76,175,80,"+intensity*.8+")":"#111825",borderRadius:4,padding:"6px 4px",fontSize:9,color:v>0?"#fff":"#3a4a5e",fontWeight:v>.1?700:400}}>{v>0?(v*100).toFixed(0)+"%":"--"}</div></td>})}</tr>)}</tbody>
+    </table>
+  </div>
+</div>)}
 
-        {/* ═══ TRADE JOURNAL ═══ */}
-        {tab==="journal"&&(<div>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-            <div style={{display:"flex",gap:6}}><button onClick={()=>setJournalView("trades")} style={btn(journalView==="trades")}>TRADES ({TRADES.length})</button><button onClick={()=>setJournalView("insights")} style={btn(journalView==="insights")}>INSIGHTS ({INSIGHTS.length})</button></div>
-          </div>
-          {journalView==="trades"&&TRADES.map(t=>{const isExp=expandTrade===t.id;return <div key={t.id} onClick={()=>setExpandTrade(isExp?null:t.id)} style={{background:isExp?"#111825":"#0e1525",border:"1px solid #182038",borderLeft:"3px solid "+(t.action.includes("BUY")?"#4caf50":"#ef5350"),borderRadius:"0 6px 6px 0",padding:"10px 14px",marginBottom:4,cursor:"pointer"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div style={{display:"flex",alignItems:"center",gap:10}}><span style={{color:"#3a4a5e",fontSize:10}}>{t.date}</span><span style={{background:t.action.includes("BUY")?"#4caf5033":"#ef535033",color:t.action.includes("BUY")?"#4caf50":"#ef5350",padding:"2px 8px",borderRadius:3,fontSize:9,fontWeight:700}}>{t.action}</span><span style={{fontWeight:800,color:"#c8d0dc",fontSize:13}}>{t.symbol}</span><span style={{color:"#5c6b7a"}}>{t.qty} @ ${t.price}</span></div><span style={{background:t.status==="OPEN"?"#4caf5033":"#3a4a5e33",color:t.status==="OPEN"?"#4caf50":"#3a4a5e",padding:"2px 6px",borderRadius:3,fontSize:8,fontWeight:700}}>{t.status}</span></div>
-            <div style={{color:"#5c6b7a",fontSize:10,marginTop:4}}>{t.thesis}</div>
-            {isExp&&<div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #182038",display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,fontSize:10}}><div><div style={{color:"#00e5ff",fontSize:9,letterSpacing:1,fontWeight:700,marginBottom:3}}>STRATEGY</div><div style={{color:"#c8d0dc"}}>{t.strategy||"—"}</div></div><div><div style={{color:"#ff9100",fontSize:9,letterSpacing:1,fontWeight:700,marginBottom:3}}>EXIT PLAN</div><div style={{color:"#c8d0dc"}}>{t.exitPlan||"—"}</div></div></div>}
-          </div>})}
-          {journalView==="insights"&&INSIGHTS.map(ins=>{const isExp=expandInsight===ins.id;return <div key={ins.id} onClick={()=>setExpandInsight(isExp?null:ins.id)} style={{background:isExp?"#111825":"#0e1525",border:"1px solid #182038",borderLeft:"3px solid "+(insightColors[ins.type]||"#3a4a5e"),borderRadius:"0 6px 6px 0",padding:"10px 14px",marginBottom:4,cursor:"pointer"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div style={{display:"flex",alignItems:"center",gap:8}}><span style={{color:"#3a4a5e",fontSize:10}}>{ins.date}</span><span style={{background:(insightColors[ins.type]||"#3a4a5e")+"33",color:insightColors[ins.type]||"#3a4a5e",padding:"2px 8px",borderRadius:3,fontSize:9,fontWeight:700}}>{ins.type}</span><span style={{fontWeight:700,color:"#c8d0dc"}}>{ins.symbols}</span></div><span style={{background:(priorityColors[ins.priority]||"#3a4a5e")+"33",color:priorityColors[ins.priority]||"#3a4a5e",padding:"2px 8px",borderRadius:3,fontSize:8,fontWeight:700}}>{ins.priority}</span></div>
-            <div style={{color:"#c8d0dc",fontSize:11,marginTop:4,lineHeight:1.4}}>{ins.text}</div>
-            {isExp&&ins.action&&<div style={{marginTop:8,paddingTop:8,borderTop:"1px solid #182038"}}><div style={{color:"#ff9100",fontSize:9,letterSpacing:1,fontWeight:700,marginBottom:3}}>ACTION</div><div style={{color:"#c8d0dc",fontSize:11}}>{ins.action}</div></div>}
-          </div>})}
-        </div>)}
+{/* SCATTER */}
+{tab==="scatter"&&(<div>
+  <div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700,marginBottom:4}}>RISK vs RETURN BY FACTOR</div>
+  <div style={{fontSize:9,color:"#5c6b7a",marginBottom:10}}>Bubble size = $ exposure. X = volatility proxy. Y = return. Top-left = ideal (high return, low risk).</div>
+  <svg width="100%" height={320} viewBox="0 0 700 320" style={{display:"block"}}>
+    <line x1={60} x2={680} y1={160} y2={160} stroke="#2a3a4e" strokeWidth={.5} strokeDasharray="4,4"/>
+    <text x={370} y={310} fill="#3a4a5e" fontSize={9} textAnchor="middle">Risk (Volatility)</text>
+    <text x={14} y={160} fill="#3a4a5e" fontSize={9} textAnchor="middle" transform="rotate(-90,14,160)">Return %</text>
+    {scatterData.map((d,i)=>{const cx=60+d.x/35*620;const cy=160-d.y/40*140;const r=Math.max(8,Math.sqrt(d.size/Math.max(...scatterData.map(s=>s.size)))*30);return <g key={i}><circle cx={cx} cy={cy} r={r} fill={d.color} opacity={.7}/><text x={cx} y={cy-r-4} fill="#c8d0dc" fontSize={9} textAnchor="middle">{d.name.split("/")[0]}</text></g>})}
+  </svg>
+  <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:8}}>{scatterData.map(s=><span key={s.name} style={{fontSize:9,display:"flex",alignItems:"center",gap:3}}><span style={{width:8,height:8,borderRadius:8,background:s.color}}/>{s.name.split("/")[0]}: {s.y>=0?"+":""}{s.y.toFixed(1)}%</span>)}</div>
+</div>)}
 
-        {/* ═══ PERFORMANCE ═══ */}
-        {tab==="performance"&&(<div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:16}}>
-            {[["Total Invested",fmtF(totalBasis),"#3a4a5e"],["Current Value",fmtF(totalMV),"#00e5ff"],["Unrealized P&L",(totalMV-totalBasis>=0?"+":"")+fmtF(totalMV-totalBasis),totalMV>=totalBasis?"#4caf50":"#ef5350"],["Return %",pct((totalMV-totalBasis)/totalBasis),totalMV>=totalBasis?"#4caf50":"#ef5350"]].map((c,i)=><div key={i} style={{background:"#0e1525",border:"1px solid #182038",borderRadius:8,padding:"16px 20px",textAlign:"center"}}><div style={{color:"#3a4a5e",fontSize:9,letterSpacing:1,marginBottom:6}}>{c[0]}</div><div style={{fontSize:22,fontWeight:800,color:c[2]}}>{c[1]}</div></div>)}
-          </div>
-          <div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700,marginBottom:8}}>P&L BY POSITION</div>
-          {consolidated.map(c=>{const pl=c.mv-c.basis;const plPct=c.basis>0?pl/c.basis:0;return <div key={c.name} style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}><span style={{width:60,fontSize:11,fontWeight:700,color:"#c8d0dc",textAlign:"right"}}>{c.name}</span><div style={{flex:1,height:22,background:"#111825",borderRadius:4,position:"relative",overflow:"hidden"}}><div style={{width:Math.min(100,Math.abs(plPct)*100)+"%",height:"100%",background:pl>=0?"#4caf50":"#ef5350",borderRadius:4,opacity:.6}}/><span style={{position:"absolute",left:8,top:4,fontSize:9,fontWeight:700,color:"#fff"}}>{pl>=0?"+":""}{fmt(Math.abs(pl))} ({plPct>=0?"+":""}{pct(plPct)})</span></div></div>})}
-          <div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700,marginTop:16,marginBottom:8}}>RETURN BY ACCOUNT</div>
-          {Object.keys(AC).map(acct=>{const ap=P.filter(p=>p.acct===acct);const amv=ap.reduce((s,p)=>s+p.mv,0);const ab=ap.reduce((s,p)=>s+p.basis,0);const pl=amv-ab;const plPct=ab>0?pl/ab:0;return <div key={acct} style={{display:"flex",alignItems:"center",gap:12,marginBottom:6}}><span style={{width:80,fontSize:11,fontWeight:700,color:AC[acct],textAlign:"right"}}>{acct}</span><div style={{flex:1,height:24,background:"#111825",borderRadius:4,position:"relative",overflow:"hidden"}}><div style={{width:Math.min(100,Math.abs(plPct)*100)+"%",height:"100%",background:pl>=0?"#4caf50":"#ef5350",borderRadius:4,opacity:.6}}/><span style={{position:"absolute",left:8,top:5,fontSize:10,fontWeight:700,color:"#fff"}}>{pl>=0?"+":""}{fmt(Math.abs(pl))} ({plPct>=0?"+":""}{pct(plPct)})</span></div></div>})}
-        </div>)}
+{/* HISTORY */}
+{tab==="history"&&(<div>
+  <div style={{background:"#0c1019",border:"1px solid #151d2e",borderRadius:8,padding:16}}><LineChart data={HIST} height={280}/></div>
+  <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginTop:10}}>{[["Starting",fmtF(HIST[0]?.hh||0),"#3a4a5e"],["Current",fmtF(HIST[HIST.length-1]?.hh||0),"#00e5ff"],["$ P&L","+"+(fmtF((HIST[HIST.length-1]?.hh||0)-(HIST[0]?.hh||0))),"#4caf50"],["Return","+"+pct(((HIST[HIST.length-1]?.hh||0)-(HIST[0]?.hh||0))/(HIST[0]?.hh||1)),"#4caf50"]].map((c,i)=><div key={i} style={{background:"#0c1019",border:"1px solid #151d2e",borderRadius:6,padding:"8px 12px",textAlign:"center"}}><div style={{color:"#3a4a5e",fontSize:9,marginBottom:2}}>{c[0]}</div><div style={{fontSize:15,fontWeight:800,color:c[2]}}>{c[1]}</div></div>)}</div>
+</div>)}
+
+{/* JOURNAL */}
+{tab==="journal"&&(<div>
+  <div style={{display:"flex",gap:6,marginBottom:10}}><button onClick={()=>setJournalView("trades")} style={btn(journalView==="trades")}>TRADES ({TRADES.length})</button><button onClick={()=>setJournalView("insights")} style={btn(journalView==="insights")}>INSIGHTS ({INSIGHTS.length})</button></div>
+  {journalView==="trades"&&TRADES.map(t=>{const isExp=expandTrade===t.id;return <div key={t.id} onClick={()=>setExpandTrade(isExp?null:t.id)} style={{background:isExp?"#111825":"#0e1525",border:"1px solid #182038",borderLeft:"3px solid "+(t.action.includes("BUY")?"#4caf50":"#ef5350"),borderRadius:"0 6px 6px 0",padding:"9px 12px",marginBottom:3,cursor:"pointer"}}>
+    <div style={{display:"flex",justifyContent:"space-between"}}><div style={{display:"flex",alignItems:"center",gap:8}}><span style={{color:"#3a4a5e",fontSize:10}}>{t.date}</span><span style={{background:t.action.includes("BUY")?"#4caf5033":"#ef535033",color:t.action.includes("BUY")?"#4caf50":"#ef5350",padding:"2px 6px",borderRadius:3,fontSize:9,fontWeight:700}}>{t.action}</span><span style={{fontWeight:800,fontSize:12}}>{t.symbol}</span><span style={{color:"#5c6b7a"}}>{t.qty} @ ${t.price}</span></div><span style={{background:t.status==="OPEN"?"#4caf5033":"#3a4a5e33",color:t.status==="OPEN"?"#4caf50":"#3a4a5e",padding:"2px 6px",borderRadius:3,fontSize:8,fontWeight:700}}>{t.status}</span></div>
+    <div style={{color:"#5c6b7a",fontSize:10,marginTop:3}}>{t.thesis}</div>
+    {isExp&&<div style={{marginTop:8,paddingTop:8,borderTop:"1px solid #182038"}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,fontSize:10,marginBottom:8}}><div><div style={{color:"#00e5ff",fontSize:9,fontWeight:700,marginBottom:2}}>STRATEGY</div>{t.strategy||"—"}</div><div><div style={{color:"#ff9100",fontSize:9,fontWeight:700,marginBottom:2}}>EXIT PLAN</div>{t.exitPlan||"—"}</div></div>
+      {t.comments&&t.comments.length>0&&<div><div style={{color:"#7c4dff",fontSize:9,fontWeight:700,letterSpacing:1,marginBottom:4}}>COMMENTS</div>{t.comments.map((c,ci)=><div key={ci} style={{color:"#c8d0dc",fontSize:10,padding:"3px 0",borderBottom:"1px solid #111a28"}}>{c}</div>)}</div>}
+    </div>}
+  </div>})}
+  {journalView==="insights"&&INSIGHTS.map(ins=>{const isExp=expandInsight===ins.id;return <div key={ins.id} onClick={()=>setExpandInsight(isExp?null:ins.id)} style={{background:isExp?"#111825":"#0e1525",border:"1px solid #182038",borderLeft:"3px solid "+(insC[ins.type]||"#3a4a5e"),borderRadius:"0 6px 6px 0",padding:"9px 12px",marginBottom:3,cursor:"pointer"}}>
+    <div style={{display:"flex",justifyContent:"space-between"}}><div style={{display:"flex",alignItems:"center",gap:6}}><span style={{color:"#3a4a5e",fontSize:10}}>{ins.date}</span><span style={{background:(insC[ins.type]||"#3a4a5e")+"33",color:insC[ins.type],padding:"2px 6px",borderRadius:3,fontSize:9,fontWeight:700}}>{ins.type}</span><span style={{fontWeight:700}}>{ins.symbols}</span></div><span style={{background:(priC[ins.priority]||"#3a4a5e")+"33",color:priC[ins.priority],padding:"2px 6px",borderRadius:3,fontSize:8,fontWeight:700}}>{ins.priority}</span></div>
+    <div style={{color:"#c8d0dc",fontSize:11,marginTop:3}}>{ins.text}</div>
+    {isExp&&ins.action&&<div style={{marginTop:6,paddingTop:6,borderTop:"1px solid #182038"}}><div style={{color:"#ff9100",fontSize:9,fontWeight:700,marginBottom:2}}>ACTION</div><div style={{fontSize:11}}>{ins.action}</div></div>}
+  </div>})}
+</div>)}
+
+{/* PERFORMANCE */}
+{tab==="performance"&&(<div>
+  <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:14}}>{[["Invested",fmtF(totalBasis),"#3a4a5e"],["Current",fmtF(totalMV),"#00e5ff"],["P&L",(totalMV>=totalBasis?"+":"")+fmtF(totalMV-totalBasis),totalMV>=totalBasis?"#4caf50":"#ef5350"],["Return",pct((totalMV-totalBasis)/totalBasis),totalMV>=totalBasis?"#4caf50":"#ef5350"]].map((c,i)=><div key={i} style={{background:"#0e1525",border:"1px solid #182038",borderRadius:8,padding:"14px 18px",textAlign:"center"}}><div style={{color:"#3a4a5e",fontSize:9,marginBottom:4}}>{c[0]}</div><div style={{fontSize:20,fontWeight:800,color:c[2]}}>{c[1]}</div></div>)}</div>
+  <div style={{fontSize:10,color:"#3a4a5e",fontWeight:700,marginBottom:6}}>P&L BY POSITION</div>
+  {consolidated.map(c=>{const pl=c.mv-c.basis;const pp=c.basis>0?pl/c.basis:0;return <div key={c.name} style={{display:"flex",alignItems:"center",gap:10,marginBottom:3}}><span style={{width:55,fontSize:11,fontWeight:700,textAlign:"right"}}>{c.name}</span><div style={{flex:1,height:20,background:"#111825",borderRadius:4,position:"relative",overflow:"hidden"}}><div style={{width:Math.min(100,Math.abs(pp)*100)+"%",height:"100%",background:pl>=0?"#4caf50":"#ef5350",borderRadius:4,opacity:.6}}/><span style={{position:"absolute",left:6,top:3,fontSize:9,fontWeight:700,color:"#fff"}}>{pl>=0?"+":""}{fmt(Math.abs(pl))} ({pp>=0?"+":""}{pct(pp)})</span></div></div>})}
+</div>)}
+
+{/* AI CHAT */}
+{tab==="chat"&&(<div>
+  <div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700,marginBottom:8}}>AI STRATEGY ASSISTANT</div>
+  <div style={{background:"#0c1019",border:"1px solid #151d2e",borderRadius:8,padding:16,height:400,overflowY:"auto",marginBottom:10}}>
+    {chatMsgs.map((m,i)=><div key={i} style={{marginBottom:10,display:"flex",flexDirection:"column",alignItems:m.role==="user"?"flex-end":"flex-start"}}>
+      <div style={{background:m.role==="user"?"#00e5ff15":"#111825",border:"1px solid "+(m.role==="user"?"#00e5ff33":"#182038"),borderRadius:8,padding:"10px 14px",maxWidth:"80%",fontSize:11,lineHeight:1.5,color:"#c8d0dc"}}>{m.text}</div>
+      <div style={{fontSize:8,color:"#3a4a5e",marginTop:2}}>{m.role==="user"?"You":"AI Strategist"}</div>
+    </div>)}
+  </div>
+  <div style={{display:"flex",gap:8}}><input value={chatInput} onChange={e=>setChatInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")sendChat()}} style={{...inputSt,flex:1}} placeholder="Ask about your portfolio, risk, or strategy..."/><button onClick={sendChat} style={{...btn(true),padding:"8px 20px"}}>SEND</button></div>
+</div>)}
 
       </div>
     </div>
