@@ -3,1458 +3,261 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Portfolio Demo</title>
+<title>Portfolio Command Center</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: #080c14; color: #c8d0dc; font-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', 'Fira Code', monospace; font-size: 12px; }
-  ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { background: #0a0f1a; }
-  ::-webkit-scrollbar-thumb { background: #1e2a3a; border-radius: 3px; }
-  #root { min-height: 100vh; }
-  select { background: #141e33; color: #c8d0dc; border: 1px solid #1e2a3a; border-radius: 3px; padding: 3px 6px; font-family: inherit; font-size: 10px; }
-  button { font-family: inherit; }
-  @media(max-width:768px) { .card-grid-auto { grid-template-columns: repeat(2,1fr) !important; } }
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#06080f;color:#c8d0dc;font-family:'Courier New',monospace;min-height:100vh}
 </style>
 </head>
 <body>
-<div id="root" style="display:block"><div style="color:#3a4a5e;padding:40px;text-align:center;font-family:monospace">Loading dashboard...</div></div>
+<div id="root"><div style="color:#3a4a5e;padding:40px;text-align:center">Loading dashboard...</div></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
 <script type="text/babel">
-const { useState, useMemo } = React;
+const {useState,useMemo} = React;
+const fmt=n=>n>=1e6?`$${(n/1e6).toFixed(2)}M`:n>=1e3?`$${(n/1e3).toFixed(1)}K`:`$${n.toFixed(0)}`;
+const fmtF=n=>`$${Math.round(n).toLocaleString()}`;
+const pct=n=>`${(n*100).toFixed(1)}%`;
 
-
-// ═══ SVG CHART COMPONENTS ═══
-function SimplePie({data, dataKey, size=220, inner=40, outer=85}) {
-  const total = data.reduce((s,d) => s + (d[dataKey]||0), 0);
-  if (total === 0) return null;
-  const cx = size/2, cy = size/2;
-  let cum = -Math.PI/2;
-  const slices = data.map((d,i) => {
-    const val = d[dataKey]||0;
-    const ang = (val/total) * Math.PI * 2;
-    const s = cum; cum += ang; const e = cum;
-    const x1=cx+outer*Math.cos(s), y1=cy+outer*Math.sin(s);
-    const x2=cx+outer*Math.cos(e), y2=cy+outer*Math.sin(e);
-    const x3=cx+inner*Math.cos(e), y3=cy+inner*Math.sin(e);
-    const x4=cx+inner*Math.cos(s), y4=cy+inner*Math.sin(s);
-    const lg = ang > Math.PI ? 1 : 0;
-    const path = `M${x1},${y1} A${outer},${outer} 0 ${lg},1 ${x2},${y2} L${x3},${y3} A${inner},${inner} 0 ${lg},0 ${x4},${y4} Z`;
-    return <path key={i} d={path} fill={d.color||`hsl(${i*37},65%,50%)`} stroke="#080c14" strokeWidth={1}>
-      <title>{d.name}: {fmtF(val)} | {pct(val/total)} of view</title>
-    </path>;
-  });
-  return <svg width={size} height={size} style={{display:"block",margin:"0 auto"}}>{slices}</svg>;
-}
-
-function SimpleBar({data, dataKey, nameKey, height=340}) {
-  const maxVal = Math.max(...data.map(d=>d[dataKey]||0));
-  if (maxVal === 0) return null;
-  const bH = 22, w = 420, lW = 120;
-  const totalH = data.length * (bH + 4);
-  return <svg width="100%" height={totalH} viewBox={`0 0 ${w} ${totalH}`} style={{display:"block"}}>
-    {data.map((d,i) => {
-      const val = d[dataKey]||0;
-      const bW = (val/maxVal) * (w - lW - 60);
-      const y = i * (bH + 4);
-      return <g key={i}>
-        <text x={lW-8} y={y+bH/2+4} fill="#c8d0dc" fontSize={10} textAnchor="end" fontFamily="inherit">{(d[nameKey]||d.name||"").substring(0,16)}</text>
-        <rect x={lW} y={y+2} width={Math.max(2,bW)} height={bH-4} rx={3} fill={d.color||`hsl(${i*37},65%,50%)`} />
-        <text x={lW+bW+6} y={y+bH/2+4} fill="#5c6b7a" fontSize={9} fontFamily="inherit">{fmt(val)}</text>
-      </g>;
-    })}
-  </svg>;
-}
-
-// ═══ ACCOUNT TAX CHARACTERISTICS ═══
-const ACCT_TAX = {
-  "Brokerage": {type:"Taxable",friction:"High",taxType:"Taxable"},
-  "IRA": {type:"Traditional IRA",friction:"None",taxType:"Tax-Deferred"},
-  "401k": {type:"401k",friction:"None",taxType:"Tax-Deferred"},
-  "Crypto": {type:"Taxable",friction:"High",taxType:"Taxable"}};
-
-function getRebalanceInsights(positions, factorExp, consolidated, totalH) {
-  const insights = [];
-  
-  // 1. WINNERS IN TAX-FREE — trim freely
-  positions.filter(p => {
-    const tax = ACCT_TAX[p.acct];
-    return tax && tax.friction === "None" && p.basis > 0 && (p.mv-p.basis)/p.basis > 0.20 && p.mv > 2000;
-  }).forEach(p => {
-    const gainPct = ((p.mv-p.basis)/p.basis*100).toFixed(0);
-    insights.push({type:"trim-free",severity:gainPct>100?"high":"medium",symbol:p.id,account:p.acct,
-      msg:`${p.id} is +${gainPct}% (${fmt(p.mv-p.basis)}) in ${p.acct} — trim with ZERO tax cost`,
-      action:`Rotate into underweight factors. No tax friction in ${ACCT_TAX[p.acct].taxType} account.`,mv:p.mv});
-  });
-
-  // 2. LOSERS IN TAXABLE — harvest
-  positions.filter(p => p.acct==="Taxable" && p.basis>0 && (p.mv-p.basis)<-1000).forEach(p => {
-    const loss = p.basis-p.mv;
-    const lossPct = ((p.mv-p.basis)/p.basis*100).toFixed(0);
-    const baseName = p.id.split("-")[0];
-    const otherAccts = positions.filter(op => op.id.startsWith(baseName) && op.acct!=="Taxable").map(op=>op.acct);
-    insights.push({type:"harvest",severity:loss>10000?"high":"medium",symbol:p.id,account:"Taxable",
-      msg:`${p.id}: ${lossPct}% loss (${fmt(loss)} harvestable) in Taxable`,
-      action:otherAccts.length>0
-        ? `WASH SALE RISK: Also held in ${otherAccts.join(", ")}. Cannot buy in ANY account for 30 days after selling.`
-        : `Clean harvest — not held in other accounts. Sell and re-enter after 31 days or buy correlated substitute.`,mv:p.mv});
-  });
-
-  // 3. CONCENTRATION
-  consolidated.filter(c => c.mv/totalH > 0.08).forEach(c => {
-    const taxFree = c.positions.filter(p => ACCT_TAX[p.acct]?.friction==="None");
-    const taxable = c.positions.filter(p => ACCT_TAX[p.acct]?.friction==="High");
-    if (taxFree.length > 0) {
-      const tfMV = taxFree.reduce((s,p)=>s+p.mv,0);
-      insights.push({type:"rebalance",severity:c.mv/totalH>0.15?"high":"medium",symbol:c.name,account:"Multi",
-        msg:`${c.name}: ${pct(c.mv/totalH)} of HH across ${c.accounts.size} accounts`,
-        action:`${fmt(tfMV)} in tax-free accounts — trim there first.${taxable.length>0?" Taxable portion has tax friction.":""}`,mv:c.mv});
-    }
-  });
-
-  // 4. CROSS-ACCOUNT SAME SECURITY
-  const byBase = {};
-  positions.forEach(p => { const b=p.id.split("-")[0]; if(!byBase[b])byBase[b]=[]; byBase[b].push(p); });
-  Object.entries(byBase).forEach(([base,pList]) => {
-    if(pList.length<2) return;
-    const taxable=pList.filter(p=>ACCT_TAX[p.acct]?.friction==="High");
-    const taxFree=pList.filter(p=>ACCT_TAX[p.acct]?.friction==="None");
-    if(taxable.length>0 && taxFree.length>0) {
-      const taxMV=taxable.reduce((s,p)=>s+p.mv,0);
-      const freeMV=taxFree.reduce((s,p)=>s+p.mv,0);
-      const taxPL=taxable.reduce((s,p)=>s+(p.mv-p.basis),0);
-      insights.push({type:"cross-account",severity:"info",symbol:base,account:"Cross",
-        msg:`${base}: ${fmt(taxMV)} taxable + ${fmt(freeMV)} tax-free`,
-        action:taxPL<0
-          ? `Taxable underwater — harvest candidate. Keep tax-free positions. Watch 30-day wash sale.`
-          : `Taxable has gains — rebalance in tax-free accounts first.`,mv:taxMV+freeMV});
-    }
-  });
-
-  // 5. HSA OPTIMIZATION
-  const hsaP = positions.filter(p=>p.acct==="IRA");
-  const hsaMV = hsaP.reduce((s,p)=>s+p.mv,0) + (DEFAULT_CASH.find(c=>c.acct==="IRA")?.amt||0);
-  if(hsaMV>5000) {
-    insights.push({type:"optimize",severity:"info",symbol:"HSA",account:"IRA",
-      msg:`HSA (${fmt(hsaMV)}) — triple-tax-free, best for highest-conviction growth`,
-      action:`Currently: ${hsaP.map(p=>p.id).join(", ")}. Consider highest-growth here. Every dollar of gain is permanently tax-free.`,mv:hsaMV});
-  }
-
-  // 6. INHERITED IRA
-  const inhP = positions.filter(p=>p.acct==="IRA");
-  if(inhP.length>0) {
-    insights.push({type:"optimize",severity:"info",symbol:"Inherited IRA",account:"IRA",
-      msg:`Inherited IRA (${fmt(inhP.reduce((s,p)=>s+p.mv,0))}) has RMD requirements`,
-      action:`Plan distributions. Sell losers before distribution year. RMDs are taxable income.`,mv:inhP.reduce((s,p)=>s+p.mv,0)});
-  }
-
-  // 7. CARRIED LOSSES
-  insights.push({type:"tax-asset",severity:"high",symbol:"Carried Losses",account:"Taxable",
-    msg:`~$125K carried losses — deploy against GOOGL trim`,
-    action:`GOOGL $305K to ~$100K = ~$180K gain. Carried losses offset $125K, leaving ~$55K taxable. Trim LT lots first (lower rate). Consider spreading across 2 tax years.`,mv:125000});
-
-  return insights.sort((a,b) => ({high:0,medium:1,info:2}[a.severity]||3) - ({high:0,medium:1,info:2}[b.severity]||3));
-}
-
-
-
-// ═══════════════════════════════════════════════════════════════
-// MULTI-TAG FACTOR SYSTEM
-// Each position has multiple tags with weights (0-1).
-// Weight = "what % of this position's thesis/exposure is driven by this factor"
-// Weights don't need to sum to 1 — a stock can be 80% crypto + 50% AI if both are real drivers.
-// For EXPOSURE CALC: weighted MV = position MV × tag weight
-// This avoids double-counting in the "simple" view while allowing "factor" view to show overlap.
-// ═══════════════════════════════════════════════════════════════
-
-const FACTORS = {
-  // Thematic factors
-  "Bitcoin/Crypto": "#F7931A",
-  "AI/ML": "#4285F4",
-  "Data Centers": "#00897B",
-  "Gold/Inflation": "#FFD700",
-  "PropTech/RE": "#E74C3C",
-  "Rollup/M&A": "#2ECC71",
-  "Quantum Computing": "#8E44AD",
-  "AdTech": "#00BCD4",
-  "Fintech": "#FF9800",
-  "Biotech/Pharma": "#E91E63",
-  "IoT/Edge": "#78909C",
-  "Social/Consumer": "#AB47BC",
-  "Index/Passive": "#1E88E5",
-  "Insurance": "#26A69A",
-  "Conglomerate": "#455A64",
-  "Private/Illiquid": "#616161",
-  "Mining/Resources": "#795548",
-  "Sports/Betting": "#FF6B35"};
-
-// Risk tiers
-const RISK_TIERS = { "Core": "#1565C0", "Growth": "#2E7D32", "Conviction": "#F57F17", "Speculative": "#E65100", "Moonshot": "#B71C1C", "Lottery": "#4A148C", "Hedge": "#00695C", "Illiquid": "#37474F" };
-
-// Liquidity
-const LIQUIDITY = { "High": "#4caf50", "Medium": "#ff9800", "Low": "#f44336", "None": "#616161" };
-
-const DEFAULT_P = [
-{id:"AAPL",acct:"Brokerage",own:"Demo",type:"Stock",qty:500,basis:87500,mv:124000,price:248.00,factors:{"AI/ML":.4,"Consumer Tech":.4,"Services":.2},risk:"Core",liq:"High",conv:"Hold",tf:"LT",notes:"Core position"},
-{id:"MSFT",acct:"Brokerage",own:"Demo",type:"Stock",qty:300,basis:78000,mv:126000,price:420.00,factors:{"AI/ML":.5,"Cloud":.3,"Enterprise":.2},risk:"Core",liq:"High",conv:"Hold",tf:"LT",notes:""},
-{id:"NVDA",acct:"Brokerage",own:"Demo",type:"Stock",qty:200,basis:22000,mv:34600,price:173.00,factors:{"AI/ML":.5,"Data Centers":.3,"Gaming":.2},risk:"Growth",liq:"High",conv:"Add",tf:"LT",notes:"AI infrastructure"},
-{id:"AMZN",acct:"Brokerage",own:"Demo",type:"Stock",qty:150,basis:25500,mv:30750,price:205.00,factors:{"Cloud":.4,"Consumer Tech":.3,"AI/ML":.3},risk:"Core",liq:"High",conv:"Hold",tf:"LT",notes:""},
-{id:"GOOGL",acct:"Brokerage",own:"Demo",type:"Stock",qty:200,basis:28000,mv:60200,price:301.00,factors:{"AI/ML":.5,"AdTech":.3,"Cloud":.2},risk:"Core",liq:"High",conv:"Hold",tf:"LT",notes:""},
-{id:"TSLA",acct:"Brokerage",own:"Demo",type:"Stock",qty:100,basis:18000,mv:39200,price:392.00,factors:{"EV/Clean Energy":.4,"AI/ML":.3,"Robotics":.3},risk:"Growth",liq:"High",conv:"Hold",tf:"LT",notes:"FSD + Optimus"},
-{id:"IBIT",acct:"Brokerage",own:"Demo",type:"ETF",qty:500,basis:22500,mv:19900,price:39.80,factors:{"Bitcoin/Crypto":1},risk:"Core",liq:"High",conv:"Add",tf:"LT",notes:"Bitcoin ETF"},
-{id:"COIN",acct:"Brokerage",own:"Demo",type:"Stock",qty:50,basis:12500,mv:9875,price:197.50,factors:{"Bitcoin/Crypto":.7,"Fintech":.3},risk:"Growth",liq:"High",conv:"Hold",tf:"ST",notes:""},
-{id:"VST",acct:"Brokerage",own:"Demo",type:"Stock",qty:200,basis:24000,mv:31600,price:158.00,factors:{"Energy/Power":.7,"AI/ML":.2,"Nuclear":.1},risk:"Growth",liq:"Medium",conv:"Add",tf:"LT",notes:"Data center power"},
-{id:"GLD",acct:"Brokerage",own:"Demo",type:"ETF",qty:40,basis:15200,mv:16520,price:413.00,factors:{"Gold/Inflation":1},risk:"Hedge",liq:"High",conv:"Hold",tf:"LT",notes:"Inflation hedge"},
-{id:"JPM",acct:"Brokerage",own:"Demo",type:"Stock",qty:100,basis:17500,mv:24800,price:248.00,factors:{"Financials":.7,"Fintech":.3},risk:"Core",liq:"High",conv:"Hold",tf:"LT",notes:""},
-{id:"UNH",acct:"Brokerage",own:"Demo",type:"Stock",qty:30,basis:15900,mv:16500,price:550.00,factors:{"Healthcare":.8,"AI/ML":.2},risk:"Core",liq:"High",conv:"Hold",tf:"LT",notes:""},
-{id:"PLTR",acct:"IRA",own:"Demo",type:"Stock",qty:400,basis:9200,mv:39600,price:99.00,factors:{"AI/ML":.6,"Defense":.3,"Data Centers":.1},risk:"Growth",liq:"High",conv:"Hold",tf:"ST",notes:"+330%"},
-{id:"NVDA-ira",acct:"IRA",own:"Demo",type:"Stock",qty:100,basis:11000,mv:17300,price:173.00,factors:{"AI/ML":.5,"Data Centers":.3,"Gaming":.2},risk:"Growth",liq:"High",conv:"Add",tf:"ST",notes:""},
-{id:"QXO",acct:"IRA",own:"Demo",type:"Stock",qty:1000,basis:21000,mv:18640,price:18.64,factors:{"Rollup/M&A":1},risk:"Conviction",liq:"Medium",conv:"Add",tf:"ST",notes:"Kodiak deal Q2"},
-{id:"IBIT-ira",acct:"IRA",own:"Demo",type:"ETF",qty:300,basis:16500,mv:11940,price:39.80,factors:{"Bitcoin/Crypto":1},risk:"Core",liq:"High",conv:"Hold",tf:"ST",notes:""},
-{id:"TSLA-ira",acct:"IRA",own:"Demo",type:"Stock",qty:50,basis:15000,mv:19600,price:392.00,factors:{"EV/Clean Energy":.4,"AI/ML":.3,"Robotics":.3},risk:"Growth",liq:"High",conv:"Hold",tf:"ST",notes:""},
-{id:"VST-ira",acct:"IRA",own:"Demo",type:"Stock",qty:100,basis:12000,mv:15800,price:158.00,factors:{"Energy/Power":.7,"AI/ML":.2,"Nuclear":.1},risk:"Growth",liq:"Medium",conv:"Add",tf:"ST",notes:""},
-{id:"HOOD",acct:"IRA",own:"Demo",type:"Stock",qty:150,basis:4200,mv:10634,price:70.89,factors:{"Fintech":.6,"Bitcoin/Crypto":.2,"Consumer Tech":.2},risk:"Growth",liq:"High",conv:"Hold",tf:"ST",notes:""},
-{id:"BTC",acct:"Crypto",own:"Demo",type:"Crypto",qty:0.75,basis:32000,mv:52972,price:70629,factors:{"Bitcoin/Crypto":1},risk:"Core",liq:"High",conv:"Hold",tf:"LT",notes:"Direct BTC"},
-{id:"ETH",acct:"Crypto",own:"Demo",type:"Crypto",qty:5,basis:15000,mv:10250,price:2050,factors:{"Bitcoin/Crypto":.5,"AI/ML":.2,"DeFi":.3},risk:"Growth",liq:"High",conv:"Hold",tf:"LT",notes:""},
-{id:"SOL",acct:"Crypto",own:"Demo",type:"Crypto",qty:50,basis:4000,mv:4500,price:90,factors:{"Bitcoin/Crypto":.4,"DeFi":.3,"AI/ML":.3},risk:"Speculative",liq:"High",conv:"Hold",tf:"ST",notes:""},
-{id:"AAPL-call",acct:"Brokerage",own:"Demo",type:"Option",qty:5,basis:3500,mv:4250,price:8.50,strike:260,exp:"2026-09-18",factors:{"Consumer Tech":.5,"AI/ML":.5},risk:"Growth",liq:"Medium",conv:"Monitor",tf:"ST",notes:""},
-{id:"TSLA-call",acct:"IRA",own:"Demo",type:"Option",qty:3,basis:4800,mv:3600,price:12.00,strike:450,exp:"2027-01-15",factors:{"EV/Clean Energy":.5,"Robotics":.5},risk:"Speculative",liq:"Low",conv:"Hold",tf:"ST",notes:"LEAPS"},
-{id:"VINIX",acct:"401k",own:"Demo",type:"Index",qty:300,basis:145000,mv:157500,price:525.00,factors:{"Index/Passive":.6,"AI/ML":.15,"Financials":.15,"Healthcare":.1},risk:"Core",liq:"High",conv:"Hold",tf:"LT",notes:"Employer 401k"},
+const POSITIONS=[
+{id:"AAPL",acct:"Brokerage",type:"Stock",qty:500,basis:87500,mv:124000,price:248,factors:{"AI/ML":.4,"Consumer Tech":.4,"Services":.2},risk:"Core",conv:"Hold"},
+{id:"MSFT",acct:"Brokerage",type:"Stock",qty:300,basis:78000,mv:126000,price:420,factors:{"AI/ML":.5,"Cloud":.3,"Enterprise":.2},risk:"Core",conv:"Hold"},
+{id:"NVDA",acct:"Brokerage",type:"Stock",qty:200,basis:22000,mv:34600,price:173,factors:{"AI/ML":.5,"Data Centers":.3,"Gaming":.2},risk:"Growth",conv:"Add"},
+{id:"AMZN",acct:"Brokerage",type:"Stock",qty:150,basis:25500,mv:30750,price:205,factors:{"Cloud":.4,"Consumer Tech":.3,"AI/ML":.3},risk:"Core",conv:"Hold"},
+{id:"GOOGL",acct:"Brokerage",type:"Stock",qty:200,basis:28000,mv:60200,price:301,factors:{"AI/ML":.5,"AdTech":.3,"Cloud":.2},risk:"Core",conv:"Hold"},
+{id:"TSLA",acct:"Brokerage",type:"Stock",qty:100,basis:18000,mv:39200,price:392,factors:{"EV/Clean Energy":.4,"AI/ML":.3,"Robotics":.3},risk:"Growth",conv:"Hold"},
+{id:"IBIT",acct:"Brokerage",type:"ETF",qty:500,basis:22500,mv:19900,price:39.80,factors:{"Bitcoin/Crypto":1},risk:"Core",conv:"Add"},
+{id:"COIN",acct:"Brokerage",type:"Stock",qty:50,basis:12500,mv:9875,price:197.50,factors:{"Bitcoin/Crypto":.7,"Fintech":.3},risk:"Growth",conv:"Hold"},
+{id:"VST",acct:"Brokerage",type:"Stock",qty:200,basis:24000,mv:31600,price:158,factors:{"Energy/Power":.7,"AI/ML":.2,"Nuclear":.1},risk:"Growth",conv:"Add"},
+{id:"GLD",acct:"Brokerage",type:"ETF",qty:40,basis:15200,mv:16520,price:413,factors:{"Gold/Inflation":1},risk:"Hedge",conv:"Hold"},
+{id:"JPM",acct:"Brokerage",type:"Stock",qty:100,basis:17500,mv:24800,price:248,factors:{"Financials":.7,"Fintech":.3},risk:"Core",conv:"Hold"},
+{id:"UNH",acct:"Brokerage",type:"Stock",qty:30,basis:15900,mv:16500,price:550,factors:{"Healthcare":.8,"AI/ML":.2},risk:"Core",conv:"Hold"},
+{id:"PLTR",acct:"IRA",type:"Stock",qty:400,basis:9200,mv:39600,price:99,factors:{"AI/ML":.6,"Defense":.3,"Data Centers":.1},risk:"Growth",conv:"Hold"},
+{id:"NVDA-ira",acct:"IRA",type:"Stock",qty:100,basis:11000,mv:17300,price:173,factors:{"AI/ML":.5,"Data Centers":.3,"Gaming":.2},risk:"Growth",conv:"Add"},
+{id:"QXO",acct:"IRA",type:"Stock",qty:1000,basis:21000,mv:18640,price:18.64,factors:{"Rollup/M&A":1},risk:"Conviction",conv:"Add"},
+{id:"IBIT-ira",acct:"IRA",type:"ETF",qty:300,basis:16500,mv:11940,price:39.80,factors:{"Bitcoin/Crypto":1},risk:"Core",conv:"Hold"},
+{id:"TSLA-ira",acct:"IRA",type:"Stock",qty:50,basis:15000,mv:19600,price:392,factors:{"EV/Clean Energy":.4,"AI/ML":.3,"Robotics":.3},risk:"Growth",conv:"Hold"},
+{id:"VST-ira",acct:"IRA",type:"Stock",qty:100,basis:12000,mv:15800,price:158,factors:{"Energy/Power":.7,"AI/ML":.2,"Nuclear":.1},risk:"Growth",conv:"Add"},
+{id:"HOOD",acct:"IRA",type:"Stock",qty:150,basis:4200,mv:10634,price:70.89,factors:{"Fintech":.6,"Bitcoin/Crypto":.2,"Consumer Tech":.2},risk:"Growth",conv:"Hold"},
+{id:"BTC",acct:"Crypto",type:"Crypto",qty:0.75,basis:32000,mv:52972,price:70629,factors:{"Bitcoin/Crypto":1},risk:"Core",conv:"Hold"},
+{id:"ETH",acct:"Crypto",type:"Crypto",qty:5,basis:15000,mv:10250,price:2050,factors:{"Bitcoin/Crypto":.5,"AI/ML":.2,"DeFi":.3},risk:"Growth",conv:"Hold"},
+{id:"SOL",acct:"Crypto",type:"Crypto",qty:50,basis:4000,mv:4500,price:90,factors:{"Bitcoin/Crypto":.4,"DeFi":.3,"AI/ML":.3},risk:"Speculative",conv:"Hold"},
+{id:"AAPL-call",acct:"Brokerage",type:"Option",qty:5,basis:3500,mv:4250,price:8.50,strike:260,exp:"2026-09-18",factors:{"Consumer Tech":.5,"AI/ML":.5},risk:"Growth",conv:"Monitor"},
+{id:"TSLA-call",acct:"IRA",type:"Option",qty:3,basis:4800,mv:3600,price:12,strike:450,exp:"2027-01-15",factors:{"EV/Clean Energy":.5,"Robotics":.5},risk:"Speculative",conv:"Hold"},
+{id:"VINIX",acct:"401k",type:"Index",qty:300,basis:145000,mv:157500,price:525,factors:{"Index/Passive":.6,"AI/ML":.15,"Financials":.15,"Healthcare":.1},risk:"Core",conv:"Hold"},
 ];
-
-const DEFAULT_CASH = [
-{acct:"Brokerage",own:"Demo",amt:125000},{acct:"IRA",own:"Demo",amt:15000},
-{acct:"401k",own:"Demo",amt:8000},{acct:"Crypto",own:"Demo",amt:12000}
-];
-
-const DEFAULT_WATCHLIST = [
-{sym:"CEG",thesis:"Nuclear power for AI data centers",range:"$250-270",priority:"HIGH",acct:"Brokerage",fw:{"Energy/Power":.7,"Nuclear":.3}},
-{sym:"LNG",thesis:"LNG infrastructure play",range:"$180-195",priority:"MEDIUM",acct:"Brokerage",fw:{"Energy/Power":.8,"Infrastructure":.2}},
-{sym:"ARM",thesis:"AI chip architecture licensing",range:"$120-135",priority:"HIGH",acct:"IRA",fw:{"AI/ML":.7,"Semiconductors":.3}},
-];
-
-const ownLabel=(o)=>o==="Demo"?"J":o==="Demo"?"JJ":o;
-const fmt = (n) => n >= 1e6 ? `$${(n/1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n/1e3).toFixed(1)}K` : `$${n.toFixed(0)}`;
-const fmtF = (n) => `$${n.toLocaleString("en-US", {maximumFractionDigits:0})}`;
-const pct = (n) => `${(n*100).toFixed(1)}%`;
-const dte = (d) => { if(!d) return Infinity; return Math.max(0, Math.floor((new Date(d)-new Date())/864e5)); };
-
-
-// ═══ DATA FETCHING LAYER ═══
-// Tries Google Sheet first, falls back to hardcoded DEFAULT_P/DEFAULT_CASH
-async function fetchSheetData() { return { positions: DEFAULT_P, cash: DEFAULT_CASH, source: 'demo' }; }
-
-
-function tryParseJSON(str, fallback) {
-  if (!str || typeof str !== 'string') return fallback;
-  let cleaned = str.trim();
-  if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
-    cleaned = cleaned.slice(1, -1);
-  }
-  cleaned = cleaned.replace(/""/g, '"');
-  try { return JSON.parse(cleaned); } catch(e) {
-    // Google Sheets exports unquoted keys like {AI/ML:0.7}
-    // Convert to valid JSON by quoting keys
-    try {
-      const fixed = cleaned.replace(/([{,])\s*([^{},:"]+?)\s*:/g, '$1"$2":');
-      return JSON.parse(fixed);
-    } catch(e2) {
-      return fallback;
-    }
-  }
-}
-
-// Fetch live prices from Yahoo Finance via our API
-async function fetchLivePrices() { return {}; }
-
-
-// Apply live prices to positions
-function applyPrices(positions, priceMap) {
-  const tickerMap = {
-    'GOOGL':'GOOGL','QXO':'QXO','OPEN':'OPEN','COIN':'COIN',
-    'GLXY':'GLXY',
-    'IBIT':'IBIT','ZETA':'ZETA','GLD':'GLD','NVDA':'NVDA',
-    'B':'GOLD','BRK':'BRK-B','HOOD':'HOOD',
-    'VINIX':'VINIX','BTC':'BTCUSD','ETH':'ETHUSD','SOL':'SOLUSD'};
-  
-  return positions.map(p => {
-    const base = p.id.split('-')[0];
-    const ticker = tickerMap[p.id] || tickerMap[base] || base;
-    const quote = priceMap[ticker] || priceMap[p.id] || priceMap[base];
-    if (!quote || !quote.price) return p;
-    
-    // Don't update options/warrants with stock price (they have their own pricing)
-    if (p.type === 'Option' || p.type === 'Warrant') {
-      return { ...p, dailyChange: quote.change, dailyChangePct: quote.changePct, prevClose: quote.prevClose, high52: quote.high52, low52: quote.low52 };
-    }
-    
-    const newPrice = quote.price;
-    const newMV = p.type === 'Crypto' ? newPrice * p.qty : newPrice * p.qty;
-    return {
-      ...p,
-      price: newPrice,
-      mv: newMV,
-      dailyChange: quote.change,
-      dailyChangePct: quote.changePct,
-      prevClose: quote.prevClose,
-      high52: quote.high52,
-      low52: quote.low52};
-  });
-}
-
-
-// ═══ SIMULATED BALANCE HISTORY ═══
-const genHistory = () => {
-  const start = new Date("2025-06-01"), end = new Date("2026-03-17");
-  const days = Math.floor((end - start) / 864e5);
-  const data = [];
-  const accts = {"Brokerage":600000,"IRA":200000,"Crypto":170000};
-  const fcts = {"Bitcoin/Crypto":240000,"AI/ML":350000,"Rollup/M&A":100000,"PropTech/RE":70000,"Gold/Inflation":50000,"Index/Passive":280000};
-  for(let i=0;i<=days;i++){
-    const d=new Date(start);d.setDate(d.getDate()+i);
-    if(d.getDay()===0||d.getDay()===6) continue;
-    const n=()=>(Math.random()-.48)*.015;
-    const cn=()=>(Math.random()-.45)*.035;
-    Object.keys(accts).forEach(k=>{if(k==="SKIP")return;if(k==="Crypto")accts[k]*=(1+cn());else accts[k]*=(1+n())});
-    Object.keys(fcts).forEach(k=>{if(k==="Bitcoin/Crypto")fcts[k]*=(1+cn());else fcts[k]*=(1+n())});
-    const hh=Object.values(accts).reduce((s,v)=>s+v,0);
-    data.push({date:d.toISOString().split("T")[0],ts:d.getTime(),household:Math.round(hh),
-      taxable:Math.round(accts["Taxable"]+accts["Crypto"]),
-      jeffRet:Math.round(accts["IRA"]+accts["IRA"]+accts["IRA"]+accts["IRA"]+accts["IRA"]),
-      jessRet:Math.round(accts["401k"]+accts["401k"]+accts["401k"]),
-      accounts:{...accts},factors:{...fcts}});
-  }
-  if(data.length>0){const l=data[data.length-1];l.household=2284000;}
-  return data;
-};
-const HISTORY=genHistory();
-
-// ═══ SVG LINE CHART ═══
-function LineChart({data,lines,height=260,onClickDate}){
-  const [hover,setHover] = useState(null);
-  const [clicked,setClicked] = useState(null);
-  if(!data||data.length<2)return null;
-  const w=700,h=height,pad={t:20,r:20,b:30,l:65};
-  const iw=w-pad.l-pad.r,ih=h-pad.t-pad.b;
-  const allVals=lines.flatMap(l=>data.map(d=>d[l.key]||(l.acc?l.acc(d):0)));
-  const yMin=Math.min(...allVals)*.97,yMax=Math.max(...allVals)*1.03;
-  const xMin=data[0].ts,xMax=data[data.length-1].ts;
-  const sx=v=>pad.l+((v-xMin)/(xMax-xMin))*iw;
-  const sy=v=>pad.t+ih-((v-yMin)/(yMax-yMin))*ih;
-  const paths=lines.map(l=>{const pts=data.map(d=>{const v=d[l.key]||(l.acc?l.acc(d):0);return sx(d.ts)+","+sy(v)}).join(" L");return{...l,d:"M"+pts}});
-  const yTicks=Array.from({length:5},(_,i)=>yMin+(yMax-yMin)*(i/4));
-  const xTicks=Array.from({length:6},(_,i)=>xMin+(xMax-xMin)*(i/5));
-  
-  const handleMouse=(e)=>{
-    const svg=e.currentTarget;
-    const rect=svg.getBoundingClientRect();
-    const x=(e.clientX-rect.left)/rect.width*w;
-    if(x<pad.l||x>w-pad.r){setHover(null);return;}
-    const ratio=(x-pad.l)/iw;
-    const idx=Math.round(ratio*(data.length-1));
-    if(idx>=0&&idx<data.length)setHover(idx);
-  };
-  
-  const handleClick=(e)=>{
-    if(hover!==null){
-      setClicked(hover);
-      if(onClickDate)onClickDate(data[hover]);
-    }
-  };
-  
-  const hd=hover!==null?data[hover]:null;
-  const cd=clicked!==null&&clicked<data.length?data[clicked]:null;
-  
-  return <div>
-    <svg width="100%" height={h} viewBox={"0 0 "+w+" "+h} style={{display:"block",cursor:"crosshair"}} onMouseMove={handleMouse} onMouseLeave={()=>setHover(null)} onClick={handleClick}>
-      {yTicks.map((v,i)=><g key={i}><line x1={pad.l} x2={w-pad.r} y1={sy(v)} y2={sy(v)} stroke="#151d2e" strokeWidth={.5}/><text x={pad.l-8} y={sy(v)+4} fill="#3a4a5e" fontSize={9} textAnchor="end" fontFamily="inherit">{fmtF(v)}</text></g>)}
-      {xTicks.map((v,i)=>{const d=new Date(v);return <text key={i} x={sx(v)} y={h-6} fill="#3a4a5e" fontSize={9} textAnchor="middle" fontFamily="inherit">{d.toLocaleDateString("en-US",{month:"short",year:"2-digit"})}</text>})}
-      {paths.map((p,i)=><path key={i} d={p.d} fill="none" stroke={p.color} strokeWidth={p.width||2} opacity={p.opacity||1}/>)}
-      {lines.map((l,i)=><g key={i} transform={"translate("+(pad.l+i*120)+","+(h-28)+")"}><rect width={10} height={3} fill={l.color} rx={1} y={-2}/><text x={14} y={2} fill="#c8d0dc" fontSize={9} fontFamily="inherit">{l.label}</text></g>)}
-      {hd&&<g>
-        <line x1={sx(hd.ts)} x2={sx(hd.ts)} y1={pad.t} y2={h-pad.b} stroke="#00e5ff" strokeWidth={1} opacity={.5} strokeDasharray="3,3"/>
-        {lines.map((l,i)=>{const v=hd[l.key]||(l.acc?l.acc(hd):0);return <circle key={i} cx={sx(hd.ts)} cy={sy(v)} r={4} fill={l.color} stroke="#06080f" strokeWidth={2}/>})}
-      </g>}
-      {cd&&<line x1={sx(cd.ts)} x2={sx(cd.ts)} y1={pad.t} y2={h-pad.b} stroke="#ff9100" strokeWidth={1.5} opacity={.7}/>}
-    </svg>
-    {hd&&<div style={{background:"#111825",border:"1px solid #182038",borderRadius:6,padding:"8px 14px",marginTop:4,display:"flex",gap:16,alignItems:"center",flexWrap:"wrap"}}>
-      <span style={{color:"#00e5ff",fontSize:11,fontWeight:700}}>{new Date(hd.ts).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}</span>
-      {lines.map((l,i)=>{const v=hd[l.key]||(l.acc?l.acc(hd):0);const start=data[0][l.key]||(l.acc?l.acc(data[0]):0);const chg=start>0?(v-start)/start:0;return <span key={i} style={{display:"flex",alignItems:"center",gap:4}}>
-        <span style={{width:8,height:3,borderRadius:1,background:l.color}}/>
-        <span style={{color:"#c8d0dc",fontSize:10}}>{l.label}:</span>
-        <span style={{color:"#00e5ff",fontSize:11,fontWeight:700}}>{fmtF(v)}</span>
-        <span style={{color:chg>=0?"#4caf50":"#ef5350",fontSize:9}}>({chg>=0?"+":""}{(chg*100).toFixed(1)}%)</span>
-      </span>})}
-    </div>}
-  </div>;
-}
-
-
-const DEFAULT_TRADES=[
-{id:1,date:"2026-03-15",symbol:"NVDA",action:"BUY",qty:100,price:165.00,account:"IRA",thesis:"AI infrastructure pullback. Adding on weakness below $170.",strategy:"Accumulate on dips",exitPlan:"Trim 25% at $220",reentry:"Below $155",status:"OPEN",tags:["AI/ML"]},
-{id:2,date:"2026-03-10",symbol:"VST",action:"BUY",qty:200,price:148.00,account:"Brokerage",thesis:"Energy demand from data centers. Nuclear renaissance.",strategy:"Long-term hold for AI power demand",exitPlan:"Hold until $250+",reentry:"Below $140",status:"OPEN",tags:["Energy/Power"]},
-{id:3,date:"2026-03-01",symbol:"QXO",action:"BUY",qty:500,price:21.00,account:"IRA",thesis:"Brad Jacobs acquiring Kodiak. Building products rollup.",strategy:"Accumulate pre-Kodiak close",exitPlan:"Trim at $30",reentry:"Below $18",status:"OPEN",tags:["Rollup/M&A"]},
-];
-
-
-
-// ═══ ADVANCED CHART COMPONENTS ═══
-function BarChartH({data,height=220}){
-  if(!data||!data.length)return null;
-  const w=680,h=Math.max(height,data.length*32+30),p={t:10,r:20,b:10,l:110};
-  const maxV=Math.max(...data.map(d=>Math.abs(d.value)),1);
-  const barH=Math.min(26,((h-p.t-p.b)/data.length)-4);
-  return <svg width="100%" height={h} viewBox={"0 0 "+w+" "+h} style={{display:"block"}}>
-    {data.map((d,i)=>{const bw=Math.abs(d.value)/maxV*(w-p.l-p.r-80);const y=p.t+i*(barH+4);return <g key={i}>
-      <text x={p.l-8} y={y+barH/2+4} fill="#c8d0dc" fontSize={10} textAnchor="end" fontFamily="inherit">{d.name}</text>
-      <rect x={p.l} y={y} width={Math.max(2,bw)} height={barH} rx={3} fill={d.color||(d.value>=0?"#4caf50":"#ef5350")} opacity={.85}/>
-      <text x={p.l+bw+8} y={y+barH/2+4} fill={d.value>=0?"#4caf50":"#ef5350"} fontSize={10} fontFamily="inherit" fontWeight="600">{d.label||fmt(d.value)}</text>
-    </g>})}
-  </svg>;
-}
-
-function HeatMapChart({rows,cols,getData,colorMap}){
-  const w=700,p={t:10,r:10,b:10,l:110};
-  const cellW=(w-p.l-p.r)/cols.length;
-  const cellH=28;
-  const totalH=rows.length*cellH+p.t+p.b+20;
-  const allV=rows.flatMap(r=>cols.map(c=>getData(r,c)));
-  const maxV=Math.max(...allV.map(Math.abs),.01);
-  return <svg width="100%" height={totalH} viewBox={"0 0 "+w+" "+totalH} style={{display:"block"}}>
-    {cols.map((c,ci)=><text key={ci} x={p.l+ci*cellW+cellW/2} y={p.t+8} fill="#5c6b7a" fontSize={8} textAnchor="middle" fontFamily="inherit" transform={"rotate(-25,"+(p.l+ci*cellW+cellW/2)+","+(p.t+8)+")"}>{c.length>12?c.split("/")[0]:c}</text>)}
-    {rows.map((r,ri)=>{const y=p.t+20+ri*cellH;return <g key={ri}>
-      <text x={p.l-8} y={y+cellH/2+4} fill="#c8d0dc" fontSize={9} textAnchor="end" fontFamily="inherit">{r}</text>
-      {cols.map((c,ci)=>{const v=getData(r,c);const intensity=Math.min(1,Math.abs(v)/maxV);const bg=v===0?"#111825":v>0?"rgba(76,175,80,"+(intensity*.8)+")":"rgba(239,83,80,"+(intensity*.8)+")";
-        return <g key={ci}><rect x={p.l+ci*cellW+1} y={y+1} width={cellW-2} height={cellH-2} rx={3} fill={bg}/>
-          {cellW>40&&<text x={p.l+ci*cellW+cellW/2} y={y+cellH/2+4} fill="#c8d0dc" fontSize={8} textAnchor="middle" fontFamily="inherit">{v>0?"+"+(v*100).toFixed(0)+"%":v<0?(v*100).toFixed(0)+"%":"--"}</text>}
-        </g>})}
-    </g>})}
-  </svg>;
-}
-
-function ScatterChart({data,height=300}){
-  if(!data||!data.length)return null;
-  const w=700,h=height,p={t:20,r:30,b:40,l:60};
-  const iw=w-p.l-p.r,ih=h-p.t-p.b;
-  const xVals=data.map(d=>d.x),yVals=data.map(d=>d.y);
-  const xMin=Math.min(...xVals)*1.1,xMax=Math.max(...xVals)*1.1;
-  const yMin=Math.min(...yVals,0)*1.2,yMax=Math.max(...yVals)*1.2;
-  const sx=v=>p.l+((v-xMin)/(xMax-xMin||1))*iw;
-  const sy=v=>p.t+ih-((v-yMin)/(yMax-yMin||1))*ih;
-  const maxSize=Math.max(...data.map(d=>d.size),1);
-  return <svg width="100%" height={h} viewBox={"0 0 "+w+" "+h} style={{display:"block"}}>
-    <line x1={p.l} x2={w-p.r} y1={sy(0)} y2={sy(0)} stroke="#2a3a4e" strokeWidth={.5} strokeDasharray="4,4"/>
-    <text x={w/2} y={h-6} fill="#3a4a5e" fontSize={9} textAnchor="middle" fontFamily="inherit">Risk (Volatility Proxy)</text>
-    <text x={14} y={h/2} fill="#3a4a5e" fontSize={9} textAnchor="middle" fontFamily="inherit" transform={"rotate(-90,14,"+h/2+")"}>Return %</text>
-    {data.map((d,i)=>{const r=Math.max(6,Math.sqrt(d.size/maxSize)*25);return <g key={i}>
-      <circle cx={sx(d.x)} cy={sy(d.y)} r={r} fill={d.color} opacity={.7} stroke={d.color} strokeWidth={1}/>
-      <text x={sx(d.x)} y={sy(d.y)-r-4} fill="#c8d0dc" fontSize={9} textAnchor="middle" fontFamily="inherit">{d.name}</text>
-    </g>})}
-  </svg>;
-}
-
-
+const CASH=[{acct:"Brokerage",amt:125000},{acct:"IRA",amt:15000},{acct:"401k",amt:8000},{acct:"Crypto",amt:12000}];
 const ACCT_COLORS={"Brokerage":"#00e5ff","IRA":"#448aff","401k":"#7c4dff","Crypto":"#f7931a"};
-const FACTOR_CHART_COLORS={"Bitcoin/Crypto":"#F7931A","AI/ML":"#4285F4","Rollup/M&A":"#2ECC71","PropTech/RE":"#E74C3C","Gold/Inflation":"#FFD700","Index/Passive":"#1E88E5","AdTech":"#00BCD4","Fintech":"#FF9800","Sports/Betting":"#FF6B35","Data Centers":"#00897B"};
+const FACTOR_COLORS={"Bitcoin/Crypto":"#F7931A","AI/ML":"#4285F4","Rollup/M&A":"#2ECC71","Energy/Power":"#E74C3C","Gold/Inflation":"#FFD700","Index/Passive":"#1E88E5","Cloud":"#00BCD4","Fintech":"#FF9800","Consumer Tech":"#FF6B35","Data Centers":"#00897B","EV/Clean Energy":"#8E44AD","Healthcare":"#E91E63","Financials":"#455A64","Defense":"#26A69A","AdTech":"#AB47BC","Robotics":"#78909C","Gaming":"#CDDC39","Enterprise":"#607D8B","Services":"#9E9E9E","DeFi":"#00E676","Nuclear":"#FF5722"};
 
-function App() {
-  const [tab, setTab] = useState("overview");
-  const [positions, setPositions] = useState(DEFAULT_P);
-  const [cashData, setCashData] = useState(DEFAULT_CASH);
-  const [dataSource, setDataSource] = useState("loading");
-  const [livePrices, setLivePrices] = useState({});
-  const [lastUpdate, setLastUpdate] = useState(null);
-  const [priceError, setPriceError] = useState(false);
+function App(){
+  const [tab,setTab]=useState("overview");
+  const [acctFilter,setAcctFilter]=useState("All");
+  const P=POSITIONS;
+  const totalMV=P.reduce((s,p)=>s+p.mv,0);
+  const totalCash=CASH.reduce((s,c)=>s+c.amt,0);
+  const totalHH=totalMV+totalCash;
+  const filtered=acctFilter==="All"?P:P.filter(p=>p.acct===acctFilter);
 
-  // Load data on mount
-  React.useEffect(() => {
-    fetchSheetData().then(({positions: pos, cash, source}) => {
-      setPositions(pos);
-      setCashData(cash);
-      setDataSource(source);
-    });
-  }, []);
+  // Factor exposure
+  const factorExp=useMemo(()=>{
+    const fm={};let total=0;
+    filtered.forEach(p=>{Object.entries(p.factors||{}).forEach(([f,w])=>{fm[f]=(fm[f]||0)+p.mv*w;total+=p.mv*w})});
+    return Object.entries(fm).sort((a,b)=>b[1]-a[1]).map(([name,val])=>({name,val,pct:total>0?val/total:0}));
+  },[filtered]);
 
-  // Fetch live prices after positions load
-  React.useEffect(() => {
-    if (positions.length === 0) return;
-    const ids = positions.map(p => p.id);
-    fetchLivePrices(ids).then(pm => {
-      if (Object.keys(pm).length > 0) {
-        setLivePrices(pm);
-        setLastUpdate(new Date());
-        setPriceError(false);
-      } else {
-        setPriceError(true);
-      }
-    });
-    // Refresh prices every 60 seconds
-    const interval = setInterval(() => {
-      if (!document.hidden) { fetchLivePrices(ids).then(pm => {
-        if (Object.keys(pm).length > 0) {
-          setLivePrices(pm);
-          setLastUpdate(new Date());
-          setPriceError(false);
-        }
-      }); }
-    }, 9000000);
-    return () => clearInterval(interval);
-  }, [dataSource]);
+  // Risk breakdown
+  const riskBreak=useMemo(()=>{
+    const rm={};filtered.forEach(p=>{rm[p.risk]=(rm[p.risk]||0)+p.mv});
+    return Object.entries(rm).sort((a,b)=>b[1]-a[1]).map(([name,val])=>({name,val,pct:val/totalMV}));
+  },[filtered,totalMV]);
 
-  // Apply prices to positions
-  const P = useMemo(() => {
-    if (Object.keys(livePrices).length === 0) return positions;
-    return applyPrices(positions, livePrices);
-  }, [positions, livePrices]);
-  const [fMode, setFMode] = useState("weighted"); // "weighted" or "simple"
-  const [fAcct, setFAcct] = useState("All");
-  const [fOwn, setFOwn] = useState("All");
-  const [sortCol, setSortCol] = useState("mv");
-  const [sortDir, setSortDir] = useState(-1);
-  const [selFactor, setSelFactor] = useState(null);
-  const [expandedRow, setExpandedRow] = useState(null);
-  const [histView, setHistView] = useState("household");
-  const [timeRange, setTimeRange] = useState("ALL");
-  const [trades, setTrades] = useState(DEFAULT_TRADES);
-  const [showTradeForm, setShowTradeForm] = useState(false);
-  const [newTrade, setNewTrade] = useState({date:"",symbol:"",action:"BUY",qty:"",price:"",account:"",thesis:"",strategy:"",exitPlan:"",reentry:"",tags:""});
-  const [selectedDate, setSelectedDate] = useState(null);
-  const [perfView, setPerfView] = useState("line");
-  const [perfLineFilter, setPerfLineFilter] = useState("household");
-  const [perfSelAccts, setPerfSelAccts] = useState(["Taxable","Crypto"]);
-  const [perfSelFactors, setPerfSelFactors] = useState(["Bitcoin/Crypto","AI/ML"]);
-  const [optSortCol, setOptSortCol] = useState("dte");
-  const [optSortDir, setOptSortDir] = useState(1);
-  const sortOpt=(col)=>{if(optSortCol===col)setOptSortDir(d=>d*-1);else{setOptSortCol(col);setOptSortDir(1)}};
-  const [expandedTrade, setExpandedTrade] = useState(null);
-  const [insights, setInsights] = useState([
-    {id:1,date:"2026-03-20",type:"Epiphany",symbols:"Portfolio",text:"Bitcoin and AI infrastructure are the two themes driving 60% of my active returns. Need to increase allocation to energy/power as the bottleneck for AI buildout.",action:"Research VST, CEG, and nuclear plays. Target 10% of portfolio in energy/power.",priority:"Important"},
-    {id:2,date:"2026-03-18",type:"Risk Alert",symbols:"AAPL Call",text:"AAPL $260 Call expiring Sep 2026. Currently ITM but geopolitical risk could pull it back. Monitor closely.",action:"Set alert at $240 to reassess.",priority:"Urgent"},
-    {id:3,date:"2026-03-15",type:"Market Observation",symbols:"SPY",text:"S&P 500 broke below 200-day MA for first time since May 2025. Historically precedes 17% drawdown but 16% recovery over next year. This is a buying opportunity for patient capital.",action:"Deploy cash into NVDA and BTC on further weakness.",priority:"Important"},
-  ]);
-  const [showInsightForm, setShowInsightForm] = useState(false);
-  const [newInsight, setNewInsight] = useState({date:"",type:"Epiphany",symbols:"",text:"",action:"",priority:"Important"});
-  const [expandedInsight, setExpandedInsight] = useState(null);
-  const [journalView, setJournalView] = useState("trades");
-  const [showWlForm, setShowWlForm] = useState(false);
-  const [newWl, setNewWl] = useState({sym:"",thesis:"",range:"",priority:"HIGH",acct:"Taxable"});
-  const [wlItems, setWlItems] = useState(DEFAULT_WATCHLIST);
-  const addWl=()=>{if(!newWl.sym)return;setWlItems([...wlItems,{...newWl,fw:{}}]);setNewWl({sym:"",thesis:"",range:"",priority:"HIGH",acct:"Taxable"});setShowWlForm(false)};
-  const addInsight=()=>{if(!newInsight.text)return;setInsights([{...newInsight,id:insights.length+1,date:newInsight.date||new Date().toISOString().split("T")[0]},...insights]);setNewInsight({date:"",type:"Epiphany",symbols:"",text:"",action:"",priority:"Important"});setShowInsightForm(false)};
-  const insightColors={"Epiphany":"#7c4dff","Thesis Change":"#ff9100","Fundamental Shift":"#ef5350","Conviction Change":"#00e5ff","Market Observation":"#4caf50","Risk Alert":"#ff1744"};
-  const priorityColors={"Urgent":"#ff1744","Important":"#ff9100","Note":"#448aff"};
-  const timeRanges={"1M":Date.now()-30*864e5,"3M":Date.now()-90*864e5,"6M":Date.now()-180*864e5,"YTD":new Date("2026-01-01").getTime(),"1Y":Date.now()-365*864e5,"ALL":0};
-  const filteredHistory=useMemo(()=>HISTORY.filter(d=>d.ts>=(timeRanges[timeRange]||0)),[timeRange]);
-  const perf=useMemo(()=>{if(filteredHistory.length<2)return{};const f=filteredHistory[0],l=filteredHistory[filteredHistory.length-1];const days=(l.ts-f.ts)/864e5;const cr=(s,e)=>{if(!s||s===0)return{abs:0,pct:0,ann:0};const r=(e-s)/s;return{abs:e-s,pct:r,ann:days>0?Math.pow(1+r,365/days)-1:r}};const res={household:cr(f.household,l.household),_days:days};Object.keys(f.accounts||{}).forEach(k=>{res[k]=cr(f.accounts[k],l.accounts[k])});Object.keys(f.factors||{}).forEach(k=>{res["f_"+k]=cr(f.factors[k],l.factors[k])});return res},[filteredHistory]);
-  const addTrade=()=>{if(!newTrade.date||!newTrade.symbol)return;setTrades([{...newTrade,id:trades.length+1,qty:parseFloat(newTrade.qty)||0,price:parseFloat(newTrade.price)||0,status:"OPEN",tags:newTrade.tags?newTrade.tags.split(",").map(s=>s.trim()):[]}, ...trades]);setNewTrade({date:"",symbol:"",action:"BUY",qty:"",price:"",account:"",thesis:"",strategy:"",exitPlan:"",reentry:"",tags:""});setShowTradeForm(false)};
-  const inputSt={background:"#111825",color:"#c8d0dc",border:"1px solid #151d2e",borderRadius:4,padding:"6px 10px",fontFamily:"inherit",fontSize:11,width:"100%"};
-  const btnSt=(a)=>({padding:"5px 14px",background:a?"#00e5ff":"#0c1019",color:a?"#06080f":"#3a4a5e",border:"1px solid #151d2e",borderRadius:4,cursor:"pointer",fontFamily:"inherit",fontSize:10,fontWeight:700,letterSpacing:1});
+  // Consolidated
+  const consolidated=useMemo(()=>{
+    const cm={};
+    P.forEach(p=>{const base=p.id.split("-")[0];if(!cm[base])cm[base]={name:base,mv:0,basis:0,accounts:new Set(),factors:p.factors};cm[base].mv+=p.mv;cm[base].basis+=p.basis;cm[base].accounts.add(p.acct)});
+    return Object.values(cm).sort((a,b)=>b.mv-a.mv);
+  },[]);
 
-  const totalCash = cashData.reduce((s,c) => s + c.amt, 0);
-  const totalMV = P.reduce((s,p) => s + p.mv, 0);
-  const totalHH = totalMV + totalCash;
+  // Options
+  const options=P.filter(p=>p.exp).map(p=>({...p,dte:Math.max(0,Math.floor((new Date(p.exp)-new Date())/864e5)),pl:p.mv-p.basis}));
 
-  const filtered = useMemo(() => {
-    let f = P;
-    if (fAcct !== "All") f = f.filter(p => p.acct === fAcct);
-    if (fOwn !== "All") f = f.filter(p => p.own === fOwn);
-    return f;
-  }, [fAcct, fOwn]);
+  const tabs=[{id:"overview",l:"Overview"},{id:"factors",l:"Factor Exposure"},{id:"positions",l:"All Positions"},{id:"options",l:`Options (${options.length})`},{id:"performance",l:"Performance"}];
+  const btn=(a)=>({padding:"5px 14px",background:a?"#00e5ff":"#0c1019",color:a?"#06080f":"#3a4a5e",border:"1px solid #151d2e",borderRadius:4,cursor:"pointer",fontFamily:"inherit",fontSize:10,fontWeight:700,letterSpacing:1});
 
-  // Factor exposure calculation
-  const factorExposure = useMemo(() => {
-    const map = {};
-    Object.keys(FACTORS).forEach(f => { map[f] = { name: f, weighted: 0, simple: 0, positions: [], color: FACTORS[f] }; });
-    filtered.forEach(p => {
-      Object.entries(p.factors || {}).forEach(([f, w]) => {
-        if (map[f]) {
-          map[f].weighted += p.mv * w;
-          map[f].simple += p.mv;
-          map[f].positions.push({ ...p, weight: w });
-        }
-      });
-    });
-    return Object.values(map).filter(f => f.weighted > 0).sort((a,b) => b.weighted - a.weighted);
-  }, [filtered]);
-
-  // Risk exposure
-  const riskExposure = useMemo(() => {
-    const map = {};
-    filtered.forEach(p => {
-      const r = p.risk || "Other";
-      if (!map[r]) map[r] = { name: r, value: 0, color: RISK_TIERS[r] || "#666", count: 0 };
-      map[r].value += p.mv;
-      map[r].count++;
-    });
-    return Object.values(map).sort((a,b) => b.value - a.value);
-  }, [filtered]);
-
-  // Consolidated by name
-  const consolidated = useMemo(() => {
-    const map = {};
-    const nameMap = { "IBIT-jfid": "BTC/IBIT", "IBIT-jess": "BTC/IBIT", "BTC": "BTC/IBIT" };
-    filtered.forEach(p => {
-      const base = p.id.replace(/-tax|-jfid|-jess|-van|-inh|-hsa|-jess-ira|-jess-brk/, "").replace(/\d+/, "").replace(/-call$|-call-/, "");
-      const key = nameMap[p.id] || p.id.split("-")[0];
-      if (!map[key]) map[key] = { name: key, mv: 0, basis: 0, positions: [], accounts: new Set(), factors: {} };
-      map[key].mv += p.mv;
-      map[key].basis += p.basis;
-      map[key].positions.push(p);
-      map[key].accounts.add(p.acct);
-      Object.entries(p.factors || {}).forEach(([f,w]) => {
-        map[key].factors[f] = Math.max(map[key].factors[f] || 0, w);
-      });
-    });
-    return Object.values(map).sort((a,b) => b.mv - a.mv);
-  }, [filtered]);
-
-  // Options sorted by expiry
-  const options = useMemo(() =>
-    P.filter(p => p.exp).map(p => ({...p, dteVal: dte(p.exp), dte: dte(p.exp), pl: p.mv-p.basis, plPct: p.basis>0?(p.mv-p.basis)/p.basis:0, costEa: p.basis>0&&p.qty>0?p.basis/(p.qty*(p.type==="Warrant"?1:100)):0, status: dte(p.exp)<=14?"URGENT":dte(p.exp)<=30?"WATCH":dte(p.exp)<=60?"MONITOR":"OK"})).sort((a,b) => a.dteVal - b.dteVal), []);
-
-  // Alerts
-  const alerts = useMemo(() => {
-    const a = [];
-    options.forEach(o => {
-      if (o.dteVal <= 14) a.push({sev:"critical", msg:`${o.id} expires in ${o.dteVal}d (${o.acct})`, type:"expiry"});
-      else if (o.dteVal <= 30) a.push({sev:"warning", msg:`${o.id} expires in ${o.dteVal}d (${o.acct})`, type:"expiry"});
-      else if (o.dteVal <= 60) a.push({sev:"info", msg:`${o.id} expires in ${o.dteVal}d (${o.acct})`, type:"expiry"});
-    });
-    // Factor concentration
-    factorExposure.forEach(f => {
-      const pctHH = f.weighted / totalHH;
-      if (pctHH > 0.15) a.push({sev:"warning", msg:`Factor "${f.name}": ${pct(pctHH)} weighted exposure`, type:"concentration"});
-    });
-    if (totalCash/totalHH > 0.25) a.push({sev:"info", msg:`Cash at ${pct(totalCash/totalHH)} — consider deploying`, type:"cash"});
-    P.filter(p => p.basis > 0 && (p.mv-p.basis)/p.basis < -0.50 && p.mv > 1000).forEach(p => {
-      a.push({sev:"warning", msg:`${p.id}: ${pct((p.mv-p.basis)/p.basis)} loss (${fmt(p.basis-p.mv)}) — ${p.acct}`, type:"loss"});
-    });
-    consolidated.forEach(c => {
-      if (c.mv/totalHH > 0.15 && c.name !== "VINIX" && c.name !== "SD") {
-        a.push({sev:"warning", msg:`${c.name}: ${pct(c.mv/totalHH)} of HH across ${c.accounts.size} accts`, type:"concentration"});
-      }
-    });
-    return a;
-  }, [options, factorExposure, totalCash, totalHH, consolidated]);
-
-  const accounts = ["All", ...new Set(P.map(p => p.acct))];
-  const owners = ["All", "Demo"];
-  const ownerLabels = {"All":"All","Demo":"Demo"};
-  const sevC = {critical:"#FF1744", warning:"#FF9100", info:"#448AFF"};
-  const typeC = {Stock:"#1565C0", ETF:"#0097A7", Option:"#E65100", Warrant:"#4A148C", Crypto:"#F7931A", Index:"#1E88E5", Private:"#616161", "Sub-Acct":"#9E9E9E"};
-  const convC = {Add:"#4caf50", Hold:"#5c6b7a", Trim:"#ef5350", Review:"#ff9100", Monitor:"#FFD600"};
-
-  const tabs = [
-    {id:"overview", label:"Overview"},
-    {id:"factors", label:"Factor Exposure"},
-    {id:"positions", label:"All Positions"},
-    {id:"options", label:`Options (${options.length})`},
-    {id:"alerts", label:`Alerts (${alerts.length})`},
-    {id:"watchlist", label:"Watchlist"},
-    {id:"rebalance", label:"Rebalance Engine"},
-    {id:"history", label:"History"},
-    {id:"journal", label:"Trade Journal"},
-    {id:"performance", label:"Performance"},
-  ];
-
-  const TagPill = ({label, color, small}) => (
-    <span style={{background:color||"#333", padding: small ? "0px 4px" : "1px 6px", borderRadius:3, fontSize: small ? 8 : 9, color:"#fff", fontWeight:600, whiteSpace:"nowrap", display:"inline-block", marginRight:2, marginBottom:1}}>{label}</span>
-  );
-
-  const FactorBar = ({factors, mv, maxW}) => (
-    <div style={{display:"flex", height:6, borderRadius:3, overflow:"hidden", background:"#1a2233", width:"100%"}}>
-      {Object.entries(factors||{}).sort((a,b)=>b[1]-a[1]).map(([f,w]) => (
-        <div key={f} title={`${f}: ${(w*100).toFixed(0)}%`} style={{width:`${(w/(maxW||1))*100}%`, background:FACTORS[f]||"#666", minWidth:2}} />
-      ))}
-    </div>
-  );
-
-  return (
-    <div style={{background:"#080c14", color:"#c8d0dc", minHeight:"100vh", fontFamily:"'JetBrains Mono','SF Mono','Cascadia Code',monospace", fontSize:12}}>
-      {/* ═══ HEADER ═══ */}
-      <div style={{background:"linear-gradient(90deg,#0a0f1a,#111a2e)", borderBottom:"1px solid #182038", padding:"10px 20px", display:"flex", justifyContent:"space-between", alignItems:"center"}}>
-        <div style={{display:"flex", alignItems:"baseline", gap:14}}>
-          <span style={{fontSize:16, fontWeight:900, letterSpacing:3, color:"#00e5ff"}}>PORTFOLIO COMMAND CENTER</span>
-          <span style={{color:"#3a4a5e", fontSize:10, letterSpacing:2}}>PORTFOLIO COMMAND CENTER</span>
-        </div>
-        <div style={{display:"flex", gap:20, alignItems:"center"}}>
-          {[
-            ["TOTAL", fmtF(totalHH), "#00e5ff"],
-            ["HOLDINGS", fmt(totalMV), "#c8d0dc"],
-            ["CASH", fmt(totalCash), "#4caf50"],
-            ["CASH %", pct(totalCash/totalHH), totalCash/totalHH > 0.25 ? "#ff9100" : "#4caf50"],
-            ["SOURCE", "DEMO", dataSource === "sheet" ? "#4caf50" : "#ff9800"],
-            ["PRICES", "STATIC" ? (lastUpdate.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}) + " (" + Object.keys(livePrices).length + ")") : (priceError ? "OFFLINE" : "LOADING"), lastUpdate ? "#4caf50" : (priceError ? "#ff9800" : "#3a4a5e")],
-          ].map(([l,v,c]) => (
+  return(
+    <div style={{background:"#06080f",color:"#c8d0dc",minHeight:"100vh",fontFamily:"'Courier New',monospace",fontSize:12}}>
+      {/* HEADER */}
+      <div style={{background:"linear-gradient(90deg,#0a0f1a,#111a2e)",borderBottom:"1px solid #182038",padding:"14px 24px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <span style={{fontSize:16,fontWeight:900,letterSpacing:3,color:"#00e5ff"}}>PORTFOLIO COMMAND CENTER</span>
+        <div style={{display:"flex",gap:20,alignItems:"center"}}>
+          {[["TOTAL",fmtF(totalHH),"#00e5ff"],["HOLDINGS",fmt(totalMV),"#c8d0dc"],["CASH",fmt(totalCash),"#4caf50"],["CASH %",pct(totalCash/totalHH),totalCash/totalHH>.25?"#ff9100":"#4caf50"],["SOURCE","DEMO","#7c4dff"],["PRICES","STATIC","#3a4a5e"]].map(([l,v,c])=>(
             <div key={l} style={{textAlign:"right"}}>
-              <div style={{color:"#3a4a5e", fontSize:9, letterSpacing:1}}>{l}</div>
-              <div style={{fontSize: l==="TOTAL" ? 20 : 14, fontWeight:700, color:c}}>{v}</div>
+              <div style={{color:"#3a4a5e",fontSize:9,letterSpacing:1}}>{l}</div>
+              <div style={{fontSize:l==="TOTAL"?20:14,fontWeight:700,color:c}}>{v}</div>
             </div>
           ))}
         </div>
       </div>
-
-      {/* ═══ TABS + FILTERS ═══ */}
-      <div style={{display:"flex", borderBottom:"1px solid #182038", background:"#0a0f1a"}}>
-        {tabs.map(t => (
-          <button key={t.id} onClick={()=>setTab(t.id)} style={{
-            padding:"9px 18px", background: tab===t.id ? "#141e33" : "transparent",
-            border:"none", borderBottom: tab===t.id ? "2px solid #00e5ff" : "2px solid transparent",
-            color: tab===t.id ? "#00e5ff" : "#3a4a5e", cursor:"pointer",
-            fontFamily:"inherit", fontSize:11, fontWeight:700, letterSpacing:1
-          }}>{t.label}</button>
-        ))}
-        <div style={{marginLeft:"auto", display:"flex", gap:6, padding:"5px 14px", alignItems:"center"}}>
-          {tab === "factors" && (
-            <div style={{display:"flex", gap:4, marginRight:8}}>
-              {["weighted","simple"].map(m => (
-                <button key={m} onClick={()=>setFMode(m)} style={{
-                  padding:"3px 10px", background: fMode===m ? "#00e5ff" : "#141e33",
-                  color: fMode===m ? "#080c14" : "#3a4a5e", border:"1px solid #1e2a3a",
-                  borderRadius:3, cursor:"pointer", fontFamily:"inherit", fontSize:10, fontWeight:700, letterSpacing:1, textTransform:"uppercase"
-                }}>{m}</button>
-              ))}
-            </div>
-          )}
-          <select value={fOwn} onChange={e=>setFOwn(e.target.value)} style={{background:"#141e33", color:"#c8d0dc", border:"1px solid #1e2a3a", borderRadius:3, padding:"3px 6px", fontFamily:"inherit", fontSize:10}}>
-            {owners.map(o => <option key={o}>{o}</option>)}
+      {/* TABS */}
+      <div style={{display:"flex",borderBottom:"1px solid #151d2e",background:"#090d18"}}>
+        {tabs.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"10px 18px",background:tab===t.id?"#111825":"transparent",border:"none",borderBottom:tab===t.id?"2px solid #00e5ff":"2px solid transparent",color:tab===t.id?"#00e5ff":"#3a4a5e",cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:700,letterSpacing:1}}>{t.l}</button>)}
+        <div style={{marginLeft:"auto",padding:"8px 16px"}}>
+          <select value={acctFilter} onChange={e=>setAcctFilter(e.target.value)} style={{background:"#111825",color:"#c8d0dc",border:"1px solid #151d2e",borderRadius:4,padding:"4px 8px",fontFamily:"inherit",fontSize:10}}>
+            <option value="All">All Accounts</option>
+            {Object.keys(ACCT_COLORS).map(a=><option key={a} value={a}>{a}</option>)}
           </select>
-          <select value={fAcct} onChange={e=>setFAcct(e.target.value)} style={{background:"#141e33", color:"#c8d0dc", border:"1px solid #1e2a3a", borderRadius:3, padding:"3px 6px", fontFamily:"inherit", fontSize:10}}>
-            {accounts.map(a => <option key={a}>{a}</option>)}
-          </select>
-          {(tab==="history"||tab==="performance") && <div style={{display:"flex",gap:3,marginLeft:8}}>
-            {Object.keys(timeRanges).map(r=><button key={r} onClick={()=>setTimeRange(r)} style={btnSt(timeRange===r)}>{r}</button>)}
-          </div>}
         </div>
       </div>
+      <div style={{padding:"16px 24px"}}>
 
-      <div style={{padding:"14px 20px"}}>
-        {/* ═══════════════ OVERVIEW ═══════════════ */}
-        {tab === "overview" && (<div>
-
-            {(() => {
-              const acts = [];
-              P.filter(p => p.exp).forEach(p => {
-                const d = Math.max(0, Math.floor((new Date(p.exp) - new Date()) / 864e5));
-                if (d <= 14) acts.push({sev:"critical",msg:"[URGENT] "+p.id+" expires in "+d+"d ("+p.acct+") - MV: "+fmt(p.mv),type:"expiry"});
-                else if (d <= 30) acts.push({sev:"warning",msg:"[WATCH] "+p.id+" expires in "+d+"d ("+p.acct+")",type:"expiry"});
-              });
-              const googl = P.find(p => p.id === "GOOGL");
-              if (googl && googl.mv > 150000) acts.push({sev:"warning",msg:"GOOGL at "+fmt(googl.mv)+" - trim plan to $100K still pending",type:"action"});
-              const btcExp = P.reduce((s,p) => s + (p.mv * (p.factors?.["Bitcoin/Crypto"] || 0)), 0);
-              if (btcExp / totalHH > 0.12) acts.push({sev:"info",msg:"Bitcoin/Crypto weighted: "+pct(btcExp/totalHH)+" of HH - intentional?",type:"exposure"});
-              if (totalCash / totalHH > 0.20) acts.push({sev:"info",msg:"Cash at "+pct(totalCash/totalHH)+" ("+fmt(totalCash)+") in money market ~4%. Deploy for higher returns?",type:"cash"});
-              if (acts.length === 0) return null;
-              const sc2 = {critical:"#ff1744",warning:"#ff9100",info:"#448aff"};
-              return (<div style={{marginBottom:16}}>
-                <div style={{fontSize:10,color:"#ff9100",letterSpacing:1,fontWeight:700,marginBottom:8}}>ACTION REQUIRED ({acts.length})</div>
-                {acts.map((a,i) => (
-                  <div key={i} style={{background:"#0e1525",borderLeft:"3px solid "+sc2[a.sev],padding:"8px 14px",marginBottom:3,borderRadius:"0 4px 4px 0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <span style={{color:"#c8d0dc",fontSize:11}}>{a.msg}</span>
-                    <span style={{background:"#1a274433",color:"#3a4a5e",padding:"2px 6px",borderRadius:3,fontSize:8}}>{a.type}</span>
-                  </div>
-                ))}
-              </div>);
-            })()}          {/* Account cards */}
-          <div style={{display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:10, marginBottom:16}}>
-            {[...new Set(P.map(p=>p.acct))].map(acct => {
-              const mv = P.filter(p=>p.acct===acct).reduce((s,p)=>s+p.mv,0);
-              const cash = cashData.find(c=>c.acct===acct)?.amt||0;
-              const own = P.find(p=>p.acct===acct)?.own;
-              return (
-                <div key={acct} onClick={()=>{setFAcct(acct);setTab("positions")}} style={{
-                  background:"linear-gradient(135deg,#0e1525,#141e33)", border:"1px solid #182038",
-                  borderRadius:6, padding:"12px 14px", cursor:"pointer"
-                }}>
-                  <div style={{fontSize:9, color:"#3a4a5e", letterSpacing:1}}>{ownLabel(own)}</div>
-                  <div style={{fontSize:11, fontWeight:700, color:"#c8d0dc", marginBottom:6, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{acct}</div>
-                  <div style={{fontSize:15, fontWeight:800, color:"#00e5ff"}}>{fmt(mv+cash)}</div>
-                  <div style={{fontSize:9, color:"#3a4a5e", marginTop:3}}>{fmt(mv)} inv · {fmt(cash)} cash</div>
-                  <div style={{height:3, background:"#182038", borderRadius:2, marginTop:6}}>
-                    <div style={{height:3, background:"#00e5ff", borderRadius:2, width:`${((mv+cash)/totalHH)*100}%`, opacity:0.7}} />
-                  </div>
-                </div>
-              );
+        {/* OVERVIEW */}
+        {tab==="overview"&&(<div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:12,marginBottom:16}}>
+            {Object.keys(ACCT_COLORS).map(acct=>{
+              const ap=P.filter(p=>p.acct===acct);
+              const amv=ap.reduce((s,p)=>s+p.mv,0);
+              const ac=CASH.find(c=>c.acct===acct)?.amt||0;
+              return(<div key={acct} style={{background:"#0e1525",border:"1px solid #182038",borderLeft:"3px solid "+ACCT_COLORS[acct],borderRadius:"0 6px 6px 0",padding:14}}>
+                <div style={{fontSize:9,color:"#3a4a5e",letterSpacing:1}}>Demo</div>
+                <div style={{fontSize:14,fontWeight:800,color:ACCT_COLORS[acct]}}>{acct}</div>
+                <div style={{fontSize:20,fontWeight:900,color:"#c8d0dc",margin:"6px 0"}}>{fmt(amv+ac)}</div>
+                <div style={{fontSize:10,color:"#5c6b7a"}}>{fmt(amv)} inv · {fmt(ac)} cash</div>
+              </div>)
             })}
           </div>
-
-          {/* Two column: Factor pie + Risk pie */}
-          <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:16}}>
-            <div style={{background:"#0e1525", border:"1px solid #182038", borderRadius:6, padding:14}}>
-              <div style={{fontSize:10, color:"#3a4a5e", letterSpacing:1, fontWeight:700, marginBottom:6}}>FACTOR EXPOSURE (WEIGHTED)</div>
-              <SimplePie data={factorExposure.slice(0,10)} dataKey="weighted" />
-              <div style={{display:"flex", flexWrap:"wrap", gap:4, marginTop:4}}>
-                {factorExposure.slice(0,10).map(f => (
-                  <span key={f.name} style={{fontSize:9, color:"#c8d0dc", display:"flex", alignItems:"center", gap:3}}>
-                    <span style={{width:8, height:8, borderRadius:2, background:f.color, display:"inline-block"}} />
-                    {f.name} {pct(f.weighted/totalHH)}
-                  </span>
-                ))}
-              </div>
-            </div>
-            <div style={{background:"#0e1525", border:"1px solid #182038", borderRadius:6, padding:14}}>
-              <div style={{fontSize:10, color:"#3a4a5e", letterSpacing:1, fontWeight:700, marginBottom:6}}>RISK TIER BREAKDOWN</div>
-              <SimplePie data={riskExposure} dataKey="value" />
-              <div style={{display:"flex", flexWrap:"wrap", gap:4, marginTop:4}}>
-                {riskExposure.map(r => (
-                  <span key={r.name} style={{fontSize:9, color:"#c8d0dc", display:"flex", alignItems:"center", gap:3}}>
-                    <span style={{width:8, height:8, borderRadius:2, background:r.color, display:"inline-block"}} />
-                    {r.name} {pct(r.value/totalHH)} ({r.count})
-              <div style={{fontSize:9, color:"#5c6b7a", marginTop:6}}>% = weighted share of displayed positions. Hover pie slices for dollar amounts.</div>
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Top consolidated */}
-            {/* CASH BY ACCOUNT */}
-            <div style={{fontSize:10, color:"#3a4a5e", letterSpacing:1, fontWeight:700, marginBottom:6}}>CASH BY ACCOUNT</div>
-            <div style={{display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:8, marginBottom:16}}>
-              {cashData.map((c,i) => c.amt > 0 ? (
-                <div key={i} style={{background:"#0e1525", border:"1px solid #182038", borderRadius:6, padding:"8px 12px"}}>
-                  <div style={{fontSize:9, color:"#3a4a5e", letterSpacing:1}}>{ownLabel(c.own)}</div>
-                  <div style={{fontSize:10, fontWeight:700, color:"#c8d0dc"}}>{c.acct}</div>
-                  <div style={{fontSize:14, fontWeight:800, color:"#4caf50", marginTop:2}}>{fmt(c.amt)}</div>
-                  <div style={{fontSize:9, color:"#3a4a5e"}}>{pct(c.amt/totalHH)} of HH</div>
-                </div>
-              ) : null)}
-              <div style={{background:"#0e1525", border:"1px solid #4caf5033", borderRadius:6, padding:"8px 12px"}}>
-                <div style={{fontSize:9, color:"#4caf50", letterSpacing:1}}>TOTAL</div>
-                <div style={{fontSize:10, fontWeight:700, color:"#4caf50"}}>All Accounts</div>
-                <div style={{fontSize:14, fontWeight:800, color:"#4caf50", marginTop:2}}>{fmt(totalCash)}</div>
-                <div style={{fontSize:9, color:"#3a4a5e"}}>{pct(totalCash/totalHH)} of HH (~4% MMF)</div>
-              </div>
-            </div>
-
-          <div style={{fontSize:10, color:"#3a4a5e", letterSpacing:1, fontWeight:700, marginBottom:6}}>TOP CONSOLIDATED EXPOSURES</div>
-          <div style={{background:"#0e1525", border:"1px solid #182038", borderRadius:6, overflow:"hidden"}}>
-            {consolidated.slice(0,12).map((c,i) => {
-              const pl = c.mv - c.basis;
-              return (
-                <div key={i} style={{display:"grid", gridTemplateColumns:"140px 100px 70px 90px 60px 1fr 120px", padding:"8px 14px", borderBottom:"1px solid #111a28", background: i%2===0 ? "#0e1525" : "#0c1220", alignItems:"center"}}>
-                  <span style={{fontWeight:700, color:"#c8d0dc"}}>{c.name}</span>
-                  <span style={{color:"#00e5ff", fontWeight:600}}>{fmt(c.mv)}</span>
-                  <span style={{color: c.mv/totalHH>0.12 ? "#ff9100" : "#3a4a5e"}}>{pct(c.mv/totalHH)}</span>
-                  <span style={{color: pl>=0 ? "#4caf50" : "#ef5350"}}>{pl>=0?"+":""}{fmt(Math.abs(pl))}</span>
-                  <span style={{color:"#3a4a5e", fontSize:9}}>{c.accounts.size} acct{c.accounts.size>1?"s":""}</span>
-                  <div style={{display:"flex", gap:2, flexWrap:"wrap"}}>
-                    {Object.entries(c.factors).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([f,w]) => (
-                      <TagPill key={f} label={`${f} ${(w*100).toFixed(0)}%`} color={FACTORS[f]} small />
-                    ))}
-                  </div>
-                  <FactorBar factors={c.factors} mv={c.mv} maxW={Object.values(c.factors).reduce((s,v)=>s+v,0)} />
-                </div>
-              );
-            })}
-          </div>
-        </div>)}
-
-        {/* ═══════════════ FACTOR EXPOSURE ═══════════════ */}
-        {tab === "factors" && (<div>
-          <div style={{fontSize:10, color:"#3a4a5e", letterSpacing:1, fontWeight:700, marginBottom:4}}>
-            FACTOR EXPOSURE — {fMode.toUpperCase()} VIEW
-            <span style={{color:"#5c6b7a", fontWeight:400, marginLeft:8}}>
-              {fMode === "weighted" ? "MV × weight — no double counting" : "Full MV of every position touching this factor — shows overlap"}
-            </span>
-          </div>
-
-          <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:14}}>
-            <div style={{background:"#0e1525", border:"1px solid #182038", borderRadius:6, padding:14}}>
-              <SimpleBar data={factorExposure} dataKey={fMode} nameKey="name" />
-            </div>
-            <div style={{background:"#0e1525", border:"1px solid #182038", borderRadius:6, padding:14, overflow:"auto", maxHeight:380}}>
-              {factorExposure.map((f,i) => {
-                const val = fMode === "weighted" ? f.weighted : f.simple;
-                const isOpen = selFactor === f.name;
-                return (
-                  <div key={f.name} style={{marginBottom:2}}>
-                    <div onClick={()=>setSelFactor(isOpen ? null : f.name)} style={{
-                      display:"grid", gridTemplateColumns:"160px 100px 70px 70px 1fr", padding:"7px 10px",
-                      background: isOpen ? "#141e33" : i%2===0 ? "#0e1525" : "#0c1220",
-                      borderLeft:`3px solid ${f.color}`, cursor:"pointer", alignItems:"center", borderRadius:"0 3px 3px 0"
-                    }}>
-                      <span style={{fontWeight:700, color:"#c8d0dc"}}>{f.name}</span>
-                      <span style={{color:"#00e5ff", fontWeight:600}}>{fmt(val)}</span>
-                      <span>{pct(val/totalHH)}</span>
-                      <span style={{color:"#3a4a5e", fontSize:9}}>{f.positions.length} pos</span>
-                      <div style={{height:4, background:"#182038", borderRadius:2}}>
-                        <div style={{height:4, background:f.color, borderRadius:2, width:`${(val/totalHH)*100*3}%`, maxWidth:"100%"}} />
-                      </div>
-                    </div>
-                    {isOpen && (
-                      <div style={{background:"#111a28", padding:"4px 10px 4px 18px", borderLeft:`3px solid ${f.color}22`}}>
-                        {f.positions.sort((a,b)=>(fMode==="weighted"?b.mv*b.weight-a.mv*a.weight : b.mv-a.mv)).map(p => (
-                          <div key={p.id} style={{display:"grid", gridTemplateColumns:"120px 80px 60px 60px", padding:"3px 0", fontSize:10, borderBottom:"1px solid #0e1525"}}>
-                            <span style={{color:"#c8d0dc"}}>{p.id}</span>
-                            <span style={{color:"#3a4a5e"}}>{p.acct}</span>
-                            <span style={{color:"#00e5ff"}}>{fMode==="weighted" ? fmt(p.mv*p.weight) : fmt(p.mv)}</span>
-                            <span style={{color:"#5c6b7a"}}>{(p.weight*100).toFixed(0)}% wt</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>)}
-
-        {/* ═══════════════ ALL POSITIONS ═══════════════ */}
-        {tab === "positions" && (<div>
-          <div style={{fontSize:10, color:"#3a4a5e", letterSpacing:1, fontWeight:700, marginBottom:6}}>
-            ALL POSITIONS {fAcct!=="All" && `— ${fAcct}`} {fOwn!=="All" && `— ${fOwn}`}
-            <span style={{color:"#00e5ff", marginLeft:12}}>{filtered.length} positions · {fmt(filtered.reduce((s,p)=>s+p.mv,0))}</span>
-          </div>
-          <div style={{background:"#0e1525", border:"1px solid #182038", borderRadius:6, overflow:"auto", maxHeight:"72vh"}}>
-            <table style={{width:"100%", borderCollapse:"collapse", fontSize:11}}>
-              <thead>
-                <tr style={{background:"#0a0f1a", position:"sticky", top:0, zIndex:1}}>
-                  {[
-                    {k:"id",l:"Symbol"},{k:"acct",l:"Account"},{k:"type",l:"Type"},{k:"mv",l:"MV"},{k:"basis",l:"Basis"},
-                    {k:"pl",l:"P&L"},{k:"plp",l:"P&L%"},{k:"hhp",l:"%HH"},{k:"risk",l:"Risk"},{k:"conv",l:"Conv"},{k:"f",l:"Factors"}
-                  ].map(h => (
-                    <th key={h.k} onClick={()=>{if(h.k===sortCol) setSortDir(d=>d*-1); else {setSortCol(h.k);setSortDir(-1)}}} style={{
-                      padding:"7px 8px", color:"#3a4a5e", fontSize:9, letterSpacing:1, fontWeight:700,
-                      textAlign:"left", borderBottom:"1px solid #182038", cursor:"pointer", userSelect:"none"
-                    }}>{h.l}{sortCol===h.k ? (sortDir>0?" ▲":" ▼"):""}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {[...filtered].sort((a,b) => {
-                  if (sortCol==="pl") return ((a.mv-a.basis)-(b.mv-b.basis))*sortDir;
-                  if (sortCol==="plp") return (((a.basis>0?(a.mv-a.basis)/a.basis:0))-(b.basis>0?(b.mv-b.basis)/b.basis:0))*sortDir;
-                  if (sortCol==="hhp") return ((a.mv/totalHH)-(b.mv/totalHH))*sortDir;
-                  const av = a[sortCol], bv = b[sortCol];
-                  if (typeof av === "number") return (av-bv)*sortDir;
-                  return String(av||"").localeCompare(String(bv||""))*sortDir;
-                }).map((p,i) => {
-                  const pl = p.mv - p.basis;
-                  const plp = p.basis > 0 ? pl/p.basis : 0;
-                  const isExpanded = expandedRow === p.id;
-                  return [
-                    <tr key={p.id} onClick={()=>setExpandedRow(isExpanded?null:p.id)} style={{
-                      borderBottom:"1px solid #111a28", background: isExpanded ? "#141e33" : i%2===0?"#0e1525":"#0c1220", cursor:"pointer"
-                    }}>
-                      <td style={{padding:"6px 8px", fontWeight:700, color:"#c8d0dc"}}>{p.id}</td>
-                      <td style={{padding:"6px 8px", color:"#3a4a5e", fontSize:9}}>{p.acct}</td>
-                      <td style={{padding:"6px 8px"}}><TagPill label={p.type} color={typeC[p.type]} /></td>
-                      <td style={{padding:"6px 8px", color:"#00e5ff", fontWeight:600}}>{fmt(p.mv)}</td>
-                      <td style={{padding:"6px 8px", color:"#3a4a5e"}}>{fmt(p.basis)}</td>
-                      <td style={{padding:"6px 8px", color:pl>=0?"#4caf50":"#ef5350"}}>{pl>=0?"+":""}{fmt(Math.abs(pl))}</td>
-                      <td style={{padding:"6px 8px", color:plp>=0?"#4caf50":"#ef5350"}}>{p.basis>0?pct(plp):"—"}</td>
-                      <td style={{padding:"6px 8px", color:p.mv/totalHH>0.05?"#ff9100":"#3a4a5e"}}>{pct(p.mv/totalHH)}</td>
-                      <td style={{padding:"6px 8px"}}><TagPill label={p.risk} color={RISK_TIERS[p.risk]} /></td>
-                      <td style={{padding:"6px 8px", color:convC[p.conv], fontSize:10, fontWeight:600}}>{p.conv}</td>
-                      <td style={{padding:"6px 8px"}}>
-                        <div style={{display:"flex", gap:2, flexWrap:"wrap"}}>
-                          {Object.entries(p.factors||{}).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([f,w]) => (
-                            <TagPill key={f} label={`${f.split("/")[0]} ${(w*100).toFixed(0)}%`} color={FACTORS[f]} small />
-                          ))}
-                        </div>
-                      </td>
-                    </tr>,
-                    isExpanded && (
-                      <tr key={p.id+"_exp"} style={{background:"#111a28"}}>
-                        <td colSpan={11} style={{padding:"10px 20px"}}>
-                          <div style={{display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:16, fontSize:10}}>
-                            <div>
-                              <div style={{color:"#3a4a5e", fontSize:9, letterSpacing:1, marginBottom:4}}>FACTOR WEIGHTS</div>
-                              {Object.entries(p.factors||{}).sort((a,b)=>b[1]-a[1]).map(([f,w]) => (
-                                <div key={f} style={{display:"flex", alignItems:"center", gap:6, marginBottom:3}}>
-                                  <div style={{width:60, height:6, background:"#182038", borderRadius:3}}>
-                                    <div style={{width:`${w*100}%`, height:6, background:FACTORS[f], borderRadius:3}} />
-                                  </div>
-                                  <span style={{color:FACTORS[f], fontWeight:600}}>{(w*100).toFixed(0)}%</span>
-                                  <span style={{color:"#c8d0dc"}}>{f}</span>
-                                  <span style={{color:"#3a4a5e"}}>= {fmt(p.mv * w)}</span>
-                                </div>
-                              ))}
-                            </div>
-                            <div>
-                              <div style={{color:"#3a4a5e", fontSize:9, letterSpacing:1, marginBottom:4}}>DETAILS</div>
-                              <div>Qty: {p.qty?.toLocaleString()} · Price: ${p.price?.toLocaleString()}</div>
-                              <div>Account: {p.acct} · Owner: {p.own}</div>
-                              <div>Timeframe: {p.tf} · Liquidity: <span style={{color:LIQUIDITY[p.liq]}}>{p.liq}</span></div>
-                              {p.exp && <div>Expiry: {p.exp} · Strike: ${p.strike} · DTE: {dte(p.exp)}d</div>}
-                              {p.stlt && <div>Tax lot: {p.stlt}</div>}
-                            </div>
-                            <div>
-                              <div style={{color:"#3a4a5e", fontSize:9, letterSpacing:1, marginBottom:4}}>NOTES</div>
-                              <div style={{color:"#c8d0dc"}}>{p.notes || "—"}</div>
-                            </div>
-                            <div>
-                              <div style={{color:"#00e5ff", fontSize:9, letterSpacing:1, marginBottom:4}}>CROSS-ACCOUNT & HOLDINGS</div>
-                              {(() => {
-                                const base = p.id.split("-")[0];
-                                const related = P.filter(op => op.id !== p.id && (op.id.split("-")[0] === base || op.id.startsWith(base)));
-                                const isSubAcct = p.type === "Sub-Acct" || p.id === "CAA-BrkLink";
-                                const underlying = isSubAcct ? P.filter(op => op.acct === "401k" && op.id !== p.id) : [];
-                                return (<div>
-                                  {isSubAcct && underlying.length > 0 && (<div style={{marginBottom:6}}>
-                                    <div style={{color:"#ff9100", fontSize:8, fontWeight:700, marginBottom:3}}>UNDERLYING HOLDINGS:</div>
-                                    {underlying.map(u => (
-                                      <div key={u.id} style={{display:"flex", justifyContent:"space-between", padding:"2px 0", borderBottom:"1px solid #182038"}}>
-                                        <span style={{color:"#c8d0dc"}}>{u.id}</span>
-                                        <span style={{color:"#00e5ff"}}>{fmt(u.mv)}</span>
-                                      </div>
-                                    ))}
-                                  </div>)}
-                                  {related.length > 0 && (<div>
-                                    <div style={{color:"#4caf50", fontSize:8, fontWeight:700, marginBottom:3}}>SAME SECURITY IN OTHER ACCOUNTS:</div>
-                                    {related.map(r => (
-                                      <div key={r.id} style={{display:"flex", justifyContent:"space-between", padding:"2px 0", borderBottom:"1px solid #182038"}}>
-                                        <span style={{color:"#5c6b7a", fontSize:10}}>{r.acct}</span>
-                                        <span style={{color:"#c8d0dc"}}>{r.qty?.toLocaleString()} sh</span>
-                                        <span style={{color:"#00e5ff"}}>{fmt(r.mv)}</span>
-                                      </div>
-                                    ))}
-                                    <div style={{display:"flex", justifyContent:"space-between", padding:"3px 0", marginTop:2, fontWeight:700}}>
-                                      <span style={{color:"#c8d0dc"}}>TOTAL</span>
-                                      <span style={{color:"#00e5ff"}}>{fmt(related.reduce((s,r) => s + r.mv, 0) + p.mv)}</span>
-                                    </div>
-                                  </div>)}
-                                  {related.length === 0 && !isSubAcct && (<div style={{color:"#3a4a5e", fontSize:10}}>Only held in {p.acct}</div>)}
-                                </div>);
-                              })()}
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  ];
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>)}
-
-        {/* ═══════════════ OPTIONS ═══════════════ */}
-        {tab === "options" && (<div>
-          <div style={{fontSize:10, color:"#3a4a5e", letterSpacing:1, fontWeight:700, marginBottom:8}}>OPTIONS & WARRANTS — BY EXPIRY</div>
-          <div style={{background:"#0e1525", border:"1px solid #182038", borderRadius:6, overflow:"hidden"}}>
-            <div style={{display:"grid", gridTemplateColumns:"130px 85px 48px 40px 55px 78px 45px 65px 60px 65px 65px 65px 55px 48px", padding:"7px 10px", background:"#0a0f1a", borderBottom:"1px solid #182038", fontSize:9, color:"#3a4a5e", letterSpacing:1, fontWeight:700}}>
-              {["id","acct","type","qty","strike","exp","dte","costEa","price","basis","mv","pl","plPct","status"].map((k,ki)=><span key={k} onClick={()=>sortOpt(k)} style={{cursor:"pointer",color:optSortCol===k?"#00e5ff":"#3a4a5e"}}>{["SYMBOL","ACCOUNT","TYPE","QTY","STRIKE","EXPIRY","DTE","COST/EA","PRICE","BASIS","MV","P&L","P&L%","STATUS"][ki]}{optSortCol===k?(optSortDir>0?" ▲":" ▼"):""}</span>)}
-            </div>
-            {options.map((o,i) => {
-              const pl = o.mv - o.basis;
-              const sc = o.dteVal<=14?"#FF1744":o.dteVal<=30?"#FF9100":o.dteVal<=60?"#FFD600":"#4caf50";
-              const sl = o.dteVal<=14?"URGENT":o.dteVal<=30?"WATCH":o.dteVal<=60?"MONITOR":"OK";
-              return (
-                <div key={o.id} style={{
-                  display:"grid", gridTemplateColumns:"130px 85px 48px 40px 55px 78px 45px 65px 60px 65px 65px 65px 55px 48px",
-                  padding:"7px 10px", borderBottom:"1px solid #111a28",
-                  background: o.dteVal<=30 ? "rgba(255,23,68,0.06)" : i%2===0 ? "#0e1525" : "#0c1220"
-                }}>
-                  <span style={{fontWeight:700, color:"#c8d0dc"}}>{o.id}</span>
-                  <span style={{color:"#3a4a5e", fontSize:9}}>{o.acct}</span>
-                  <span><TagPill label={o.type} color={typeC[o.type]} /></span>
-                  <span>{o.qty}</span>
-                  <span>${o.strike}</span>
-                  <span>{o.exp}</span>
-                  <span style={{color:sc, fontWeight:700}}>{o.dteVal}d</span>
-                  <span style={{color:"#5c6b7a",fontSize:10}}>{o.basis>0&&o.qty>0?"$"+(o.basis/(o.qty*(o.type==="Warrant"?1:100))).toFixed(2):"--"}</span>
-                  <span style={{color:"#00e5ff",fontSize:10}}>${o.price?.toFixed(2)}</span>
-                  <span style={{color:"#3a4a5e"}}>{fmt(o.basis)}</span>
-                  <span style={{color:"#00e5ff"}}>{fmt(o.mv)}</span>
-                  <span style={{color:pl>=0?"#4caf50":"#ef5350"}}>{pl>=0?"+":""}{fmt(Math.abs(pl))}</span>
-                  <span style={{color:o.basis>0?(pl>=0?"#4caf50":"#ef5350"):"#3a4a5e",fontWeight:600,fontSize:10}}>{o.basis>0?(pl>=0?"+":"")+(pl/o.basis*100).toFixed(0)+"%":"--"}</span>
-                  <span style={{color:sc, fontWeight:700, fontSize:9}}>{sl}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>)}
-
-        {/* ═══════════════ ALERTS ═══════════════ */}
-        {tab === "alerts" && (<div>
-          {["critical","warning","info"].map(sev => {
-            const items = alerts.filter(a=>a.sev===sev);
-            if (!items.length) return null;
-            return (
-              <div key={sev} style={{marginBottom:14}}>
-                <div style={{fontSize:10, color:sevC[sev], letterSpacing:1, fontWeight:700, marginBottom:6, textTransform:"uppercase"}}>{sev} ({items.length})</div>
-                {items.map((a,i) => (
-                  <div key={i} style={{background:"#0e1525", borderLeft:`3px solid ${sevC[sev]}`, padding:"8px 14px", marginBottom:3, borderRadius:"0 4px 4px 0", display:"flex", justifyContent:"space-between", alignItems:"center"}}>
-                    <span style={{color:"#c8d0dc"}}>{a.msg}</span>
-                    <TagPill label={a.type} color={sevC[sev]+"44"} />
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
+            <div>
+              <div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700,marginBottom:8}}>FACTOR EXPOSURE</div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                {factorExp.slice(0,10).map(f=>(
+                  <div key={f.name} style={{background:"#0e1525",border:"1px solid #182038",borderRadius:6,padding:"6px 12px",display:"flex",alignItems:"center",gap:6}}>
+                    <span style={{width:8,height:8,borderRadius:2,background:FACTOR_COLORS[f.name]||"#666"}}/>
+                    <span style={{fontSize:10,color:"#c8d0dc"}}>{f.name}</span>
+                    <span style={{fontSize:10,fontWeight:700,color:"#00e5ff"}}>{pct(f.pct)}</span>
                   </div>
                 ))}
               </div>
-            );
-          })}
-        </div>)}
-
-        {/* ═══════════════ WATCHLIST ═══════════════ */}
-        {tab === "watchlist" && (<div>
-          
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-              <div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700}}>WATCHLIST — {wlItems.length} NAMES</div>
-              <button onClick={()=>setShowWlForm(!showWlForm)} style={{...btnSt(true),background:showWlForm?"#ef5350":"#00e5ff",color:"#06080f"}}>{showWlForm?"CANCEL":"+ ADD TO WATCHLIST"}</button>
-            </div>
-            {showWlForm && (<div style={{background:"#0e1525",border:"1px solid #00e5ff33",borderRadius:8,padding:16,marginBottom:12}}>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:10,marginBottom:10}}>
-                <div><div style={{color:"#3a4a5e",fontSize:9,marginBottom:4}}>SYMBOL</div><input value={newWl.sym} onChange={e=>setNewWl({...newWl,sym:e.target.value.toUpperCase()})} style={inputSt} placeholder="PLTR"/></div>
-                <div><div style={{color:"#3a4a5e",fontSize:9,marginBottom:4}}>PRIORITY</div><select value={newWl.priority} onChange={e=>setNewWl({...newWl,priority:e.target.value})} style={inputSt}><option>HIGH</option><option>MEDIUM</option><option>LOW</option></select></div>
-                <div><div style={{color:"#3a4a5e",fontSize:9,marginBottom:4}}>TARGET ACCOUNT</div><input value={newWl.acct} onChange={e=>setNewWl({...newWl,acct:e.target.value})} style={inputSt} placeholder="Taxable"/></div>
-                <div><div style={{color:"#3a4a5e",fontSize:9,marginBottom:4}}>ENTRY RANGE</div><input value={newWl.range} onChange={e=>setNewWl({...newWl,range:e.target.value})} style={inputSt} placeholder="$70-75"/></div>
-              </div>
-              <div style={{marginBottom:10}}><div style={{color:"#3a4a5e",fontSize:9,marginBottom:4}}>THESIS</div><textarea value={newWl.thesis} onChange={e=>setNewWl({...newWl,thesis:e.target.value})} style={{...inputSt,height:50,resize:"vertical"}} placeholder="Why are you watching this?"/></div>
-              <button onClick={addWl} style={{...btnSt(true),padding:"8px 24px",fontSize:11}}>ADD</button>
-            </div>)}
-
-          <div style={{display:"grid", gap:10}}>
-            {wlItems.map((w,i) => {
-              const priC = w.priority==="HIGH"?"#FF1744":w.priority==="MEDIUM"?"#FF9100":"#448AFF";
-              return (
-                <div key={i} style={{
-                  background:"linear-gradient(135deg,#0e1525,#141e33)", border:"1px solid #182038",
-                  borderLeft:`4px solid ${priC}`, borderRadius:"0 6px 6px 0", padding:"14px 18px"
-                }}>
-                  <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8}}>
-                    <div style={{display:"flex", alignItems:"center", gap:10}}>
-                      <span style={{fontSize:15, fontWeight:800, color:"#00e5ff"}}>{w.sym}</span>
-                      <TagPill label={w.priority} color={priC} />
-                      <span style={{color:"#3a4a5e", fontSize:9}}>{w.acct}</span>
-                    </div>
-                  </div>
-                  <div style={{color:"#c8d0dc", marginBottom:6, lineHeight:1.6}}>{w.thesis}</div>
-                  <div style={{color:"#ff9100", fontSize:11, fontWeight:600, marginBottom:8}}>ENTRY: {w.range}</div>
-                  {w.factorsWould && (
-                    <div style={{display:"flex", gap:4, flexWrap:"wrap"}}>
-                      <span style={{color:"#3a4a5e", fontSize:9, marginRight:4}}>IF ADDED →</span>
-                      {Object.entries(w.factorsWould).sort((a,b)=>b[1]-a[1]).map(([f,wt]) => (
-                        <TagPill key={f} label={`${f} ${(wt*100).toFixed(0)}%`} color={FACTORS[f]} small />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>)}
-
-        {/* ═══════════════ REBALANCE ENGINE ═══════════════ */}
-        {tab === "rebalance" && (() => {
-          const insights = getRebalanceInsights(filtered, factorExposure, consolidated, totalHH);
-          const typeLabels = {"trim-free":"TAX-FREE TRIM","harvest":"TAX-LOSS HARVEST","rebalance":"CONCENTRATION","cross-account":"CROSS-ACCOUNT","optimize":"ACCOUNT OPTIMIZATION","tax-asset":"TAX ASSET DEPLOYMENT"};
-          const typeColors = {"trim-free":"#4caf50","harvest":"#ef5350","rebalance":"#ff9800","cross-account":"#00bcd4","optimize":"#448AFF","tax-asset":"#FFD600"};
-          const sevBg = {high:"rgba(255,23,68,0.08)",medium:"rgba(255,145,0,0.05)",info:"rgba(68,138,255,0.04)"};
-          const grouped = {};
-          insights.forEach(ins => { if(!grouped[ins.type]) grouped[ins.type]=[]; grouped[ins.type].push(ins); });
-          const acctTypes = Object.entries(ACCT_TAX);
-          return (<div>
-            <div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700,marginBottom:10}}>ACCOUNT TAX MAP</div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8,marginBottom:20}}>
-              {acctTypes.map(([acct,info])=>{
-                const acctMV=P.filter(p=>p.acct===acct).reduce((s,p)=>s+p.mv,0);
-                const acctCash=cashData.find(c=>c.acct===acct)?.amt||0;
-                if(acctMV+acctCash===0&&acct!=="IRA") return null;
-                return(<div key={acct} style={{background:"#0e1525",border:"1px solid #182038",borderLeft:"3px solid "+info.color,borderRadius:"0 6px 6px 0",padding:"10px 14px"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                    <span style={{fontWeight:700,color:"#c8d0dc",fontSize:11}}>{acct}</span>
-                    <span className="tag" style={{background:info.color,padding:"1px 6px",borderRadius:3,fontSize:8,color:"#fff",fontWeight:600}}>{info.taxType}</span>
-                  </div>
-                  <div style={{fontSize:14,fontWeight:800,color:"#00e5ff",marginBottom:4}}>{fmt(acctMV+acctCash)}</div>
-                  <div style={{fontSize:9,color:info.color,fontWeight:600,marginBottom:2}}>Friction: {info.friction}</div>
-                  <div style={{fontSize:9,color:"#5c6b7a",lineHeight:1.4}}>{info.notes}</div>
-                </div>);
-              })}
-            </div>
-            <div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700,marginBottom:10}}>REBALANCING INSIGHTS — {insights.length} ACTIONS</div>
-            {Object.entries(grouped).map(([type,items])=>(
-              <div key={type} style={{marginBottom:16}}>
-                <div style={{fontSize:10,color:typeColors[type],letterSpacing:1,fontWeight:700,marginBottom:6,display:"flex",alignItems:"center",gap:8}}>
-                  <span style={{width:10,height:10,borderRadius:2,background:typeColors[type],display:"inline-block"}}></span>
-                  {typeLabels[type]||type} ({items.length})
-                </div>
-                {items.map((ins,i)=>(
-                  <div key={i} style={{background:sevBg[ins.severity],borderLeft:"3px solid "+typeColors[type],padding:"10px 16px",marginBottom:4,borderRadius:"0 4px 4px 0"}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
-                      <span style={{fontWeight:700,color:"#c8d0dc"}}>{ins.msg}</span>
-                      <div style={{display:"flex",gap:4,flexShrink:0,marginLeft:12}}>
-                        <span style={{background:ins.severity==="high"?"#FF1744":ins.severity==="medium"?"#FF9100":"#448AFF",padding:"0 4px",borderRadius:3,fontSize:8,color:"#fff",fontWeight:600}}>{ins.severity}</span>
-                      </div>
-                    </div>
-                    <div style={{fontSize:10,color:"#8a9ab5",lineHeight:1.5}}>{ins.action}</div>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>);
-        })()}
-
-
-        {/* ═══════════════ HISTORY ═══════════════ */}
-        {tab === "history" && (<div>
-          <div style={{display:"flex",gap:6,marginBottom:16}}>
-            {[{id:"household",l:"Household"},{id:"owners",l:"By Owner"},{id:"accounts",l:"By Account"},{id:"factors",l:"By Factor"},{id:"taxable",l:"Tax vs Tax-Free"},{id:"risk",l:"By Risk Tier"},{id:"conviction",l:"By Conviction"}].map(v=>
-              <button key={v.id} onClick={()=>setHistView(v.id)} style={btnSt(histView===v.id)}>{v.l}</button>
-            )}
-          </div>
-          <div style={{background:"#0e1525",border:"1px solid #182038",borderRadius:8,padding:16,marginBottom:16}}>
-            {histView==="household" && <LineChart data={filteredHistory} lines={[{key:"household",label:"Household",color:"#00e5ff",width:2.5}]}/>}
-            {histView==="owners" && <LineChart data={filteredHistory} lines={[{key:"taxable",label:"Demo",color:"#00e5ff"},{key:"jeffRet",label:"Retirement",color:"#448aff"},{key:"jessRet",label:"401k",color:"#4caf50"}]}/>}
-            {histView==="accounts" && <LineChart data={filteredHistory} height={300} lines={Object.keys(ACCT_COLORS).filter(k=>k!=="IRA"&&k!=="IRA").map(k=>({key:k,label:k,color:ACCT_COLORS[k],width:1.5,acc:d=>d.accounts?.[k]||0}))}/>}
-            {histView==="factors" && <LineChart data={filteredHistory} height={300} lines={Object.keys(FACTOR_CHART_COLORS).map(k=>({key:k,label:k.split("/")[0],color:FACTOR_CHART_COLORS[k],width:1.5,acc:d=>d.factors?.[k]||0}))}/>}
-            {histView==="taxable" && <LineChart data={filteredHistory} lines={[{key:"tax",label:"Taxable",color:"#ef5350",width:2,acc:d=>(d.accounts?.["Taxable"]||0)+(d.accounts?.["Crypto"]||0)},{key:"tf",label:"Tax-Advantaged",color:"#4caf50",width:2,acc:d=>d.household-(d.accounts?.["Taxable"]||0)-(d.accounts?.["Crypto"]||0)}]}/>}
-            {histView==="risk" && <LineChart data={filteredHistory} height={300} lines={[{key:"core",label:"Core",color:"#1565C0",width:2,acc:d=>d.household*.35},{key:"growth",label:"Growth",color:"#2E7D32",width:1.5,acc:d=>d.household*.25},{key:"spec",label:"Speculative",color:"#E65100",width:1.5,acc:d=>d.household*.15},{key:"moon",label:"Moonshot",color:"#B71C1C",width:1.5,acc:d=>d.household*.10}]}/>}
-            {histView==="conviction" && <LineChart data={filteredHistory} height={300} lines={[{key:"hold",label:"Hold",color:"#5c6b7a",width:2,acc:d=>d.household*.50},{key:"add",label:"Add",color:"#4caf50",width:2,acc:d=>d.household*.25},{key:"trim",label:"Trim",color:"#ef5350",width:1.5,acc:d=>d.household*.15},{key:"rev",label:"Review",color:"#ff9100",width:1.5,acc:d=>d.household*.10}]}/>}
-          </div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
-            {[["Starting",fmtF(filteredHistory[0]?.household||0),"#3a4a5e"],["Current",fmtF(filteredHistory[filteredHistory.length-1]?.household||0),"#00e5ff"],["$ Change",(perf.household?.abs>=0?"+":"")+fmtF(perf.household?.abs||0),perf.household?.abs>=0?"#4caf50":"#ef5350"],["Annualized",(perf.household?.ann>=0?"+":"")+pct(perf.household?.ann||0),perf.household?.ann>=0?"#4caf50":"#ef5350"]].map((c,i)=>
-              <div key={i} style={{background:"#0e1525",border:"1px solid #182038",borderRadius:6,padding:"12px 16px",textAlign:"center"}}>
-                <div style={{color:"#3a4a5e",fontSize:9,letterSpacing:1,marginBottom:4}}>{c[0]}</div>
-                <div style={{fontSize:18,fontWeight:800,color:c[2]}}>{c[1]}</div>
-              </div>
-            )}
-          </div>
-        </div>)}
-
-        {/* ═══════════════ TRADE JOURNAL ═══════════════ */}
-        {tab === "journal" && (<div>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-            <div style={{display:"flex",gap:6,alignItems:"center"}}>
-              <button onClick={()=>setJournalView("trades")} style={btnSt(journalView==="trades")}>TRADES ({trades.length})</button>
-              <button onClick={()=>setJournalView("insights")} style={btnSt(journalView==="insights")}>INSIGHTS ({insights.length})</button>
             </div>
             <div>
-              {journalView==="trades" && <button onClick={()=>setShowTradeForm(!showTradeForm)} style={{...btnSt(true),background:showTradeForm?"#ef5350":"#00e5ff",color:"#06080f"}}>{showTradeForm?"✕ CANCEL":"+ NEW TRADE"}</button>}
-              {journalView==="insights" && <button onClick={()=>setShowInsightForm(!showInsightForm)} style={{...btnSt(true),background:showInsightForm?"#ef5350":"#7c4dff",color:"#fff"}}>{showInsightForm?"✕ CANCEL":"+ NEW INSIGHT"}</button>}
-            </div>
-          </div>
-          {journalView==="trades" && showTradeForm && (<div style={{background:"#0e1525",border:"1px solid #00e5ff33",borderRadius:8,padding:20,marginBottom:16}}>
-            <div style={{fontSize:10,color:"#00e5ff",letterSpacing:1,fontWeight:700,marginBottom:12}}>LOG NEW TRADE</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr 1fr",gap:10,marginBottom:12}}>
-              <div><div style={{color:"#3a4a5e",fontSize:9,marginBottom:4}}>DATE</div><input type="date" value={newTrade.date} onChange={e=>setNewTrade({...newTrade,date:e.target.value})} style={inputSt}/></div>
-              <div><div style={{color:"#3a4a5e",fontSize:9,marginBottom:4}}>SYMBOL</div><input value={newTrade.symbol} onChange={e=>setNewTrade({...newTrade,symbol:e.target.value.toUpperCase()})} style={inputSt} placeholder="QXO"/></div>
-              <div><div style={{color:"#3a4a5e",fontSize:9,marginBottom:4}}>ACTION</div><select value={newTrade.action} onChange={e=>setNewTrade({...newTrade,action:e.target.value})} style={inputSt}><option>BUY</option><option>SELL</option><option>SELL TO OPEN</option><option>BUY TO CLOSE</option></select></div>
-              <div><div style={{color:"#3a4a5e",fontSize:9,marginBottom:4}}>QTY</div><input value={newTrade.qty} onChange={e=>setNewTrade({...newTrade,qty:e.target.value})} style={inputSt} placeholder="100"/></div>
-              <div><div style={{color:"#3a4a5e",fontSize:9,marginBottom:4}}>PRICE</div><input value={newTrade.price} onChange={e=>setNewTrade({...newTrade,price:e.target.value})} style={inputSt} placeholder="20.86"/></div>
-              <div><div style={{color:"#3a4a5e",fontSize:9,marginBottom:4}}>ACCOUNT</div><input value={newTrade.account} onChange={e=>setNewTrade({...newTrade,account:e.target.value})} style={inputSt} placeholder="IRA"/></div>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-              <div><div style={{color:"#3a4a5e",fontSize:9,marginBottom:4}}>THESIS — Why this trade?</div><textarea value={newTrade.thesis} onChange={e=>setNewTrade({...newTrade,thesis:e.target.value})} style={{...inputSt,height:60,resize:"vertical"}} placeholder="Kodiak deal closing Q2..."/></div>
-              <div><div style={{color:"#3a4a5e",fontSize:9,marginBottom:4}}>STRATEGY — Broader play?</div><textarea value={newTrade.strategy} onChange={e=>setNewTrade({...newTrade,strategy:e.target.value})} style={{...inputSt,height:60,resize:"vertical"}} placeholder="Accumulate below $21.50..."/></div>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:12}}>
-              <div><div style={{color:"#3a4a5e",fontSize:9,marginBottom:4}}>EXIT PLAN</div><textarea value={newTrade.exitPlan} onChange={e=>setNewTrade({...newTrade,exitPlan:e.target.value})} style={{...inputSt,height:50,resize:"vertical"}} placeholder="Trim 25% at $30..."/></div>
-              <div><div style={{color:"#3a4a5e",fontSize:9,marginBottom:4}}>RE-ENTRY CRITERIA</div><textarea value={newTrade.reentry} onChange={e=>setNewTrade({...newTrade,reentry:e.target.value})} style={{...inputSt,height:50,resize:"vertical"}} placeholder="If drops below $18..."/></div>
-              <div><div style={{color:"#3a4a5e",fontSize:9,marginBottom:4}}>TAGS (comma sep)</div><input value={newTrade.tags} onChange={e=>setNewTrade({...newTrade,tags:e.target.value})} style={inputSt} placeholder="Rollup/M&A, Conviction"/></div>
-            </div>
-            <button onClick={addTrade} style={{...btnSt(true),padding:"8px 24px",fontSize:11}}>LOG TRADE</button>
-          </div>)}
-          {journalView==="trades" && trades.map(t=>{const isExp=expandedTrade===t.id;return(
-            <div key={t.id} onClick={()=>setExpandedTrade(isExp?null:t.id)} style={{background:isExp?"#111825":"#0e1525",border:"1px solid #182038",borderLeft:"3px solid "+(t.action.includes("BUY")?"#4caf50":"#ef5350"),borderRadius:"0 6px 6px 0",padding:"12px 16px",marginBottom:6,cursor:"pointer"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div style={{display:"flex",alignItems:"center",gap:12}}>
-                  <span style={{color:"#3a4a5e",fontSize:10}}>{t.date}</span>
-                  <span style={{background:t.action.includes("BUY")?"#4caf5033":"#ef535033",color:t.action.includes("BUY")?"#4caf50":"#ef5350",padding:"2px 8px",borderRadius:3,fontSize:9,fontWeight:700}}>{t.action}</span>
-                  <span style={{fontWeight:800,color:"#c8d0dc",fontSize:14}}>{t.symbol}</span>
-                  <span style={{color:"#5c6b7a"}}>{t.qty} @ ${t.price}</span>
-                  <span style={{color:"#3a4a5e",fontSize:10}}>{t.account}</span>
-                </div>
-                <div style={{display:"flex",gap:4}}>
-                  <span style={{background:t.status==="OPEN"?"#4caf5033":"#3a4a5e33",color:t.status==="OPEN"?"#4caf50":"#3a4a5e",padding:"2px 6px",borderRadius:3,fontSize:8,fontWeight:700}}>{t.status}</span>
-                  {(t.tags||[]).map(tag=><span key={tag} style={{background:"#1a274433",color:"#5c6b7a",padding:"2px 6px",borderRadius:3,fontSize:8}}>{tag}</span>)}
-                </div>
-              </div>
-              <div style={{color:"#5c6b7a",fontSize:10,marginTop:4}}>{t.thesis}</div>
-              {isExp && (<div style={{marginTop:12,paddingTop:12,borderTop:"1px solid #182038"}}>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16,fontSize:10}}>
-                  <div><div style={{color:"#00e5ff",fontSize:9,letterSpacing:1,marginBottom:4,fontWeight:700}}>STRATEGY</div><div style={{color:"#c8d0dc",lineHeight:1.5}}>{t.strategy||"—"}</div></div>
-                  <div><div style={{color:"#ff9100",fontSize:9,letterSpacing:1,marginBottom:4,fontWeight:700}}>EXIT PLAN</div><div style={{color:"#c8d0dc",lineHeight:1.5}}>{t.exitPlan||"—"}</div></div>
-                  <div><div style={{color:"#4caf50",fontSize:9,letterSpacing:1,marginBottom:4,fontWeight:700}}>RE-ENTRY</div><div style={{color:"#c8d0dc",lineHeight:1.5}}>{t.reentry||"—"}</div></div>
-                </div>
-              </div>)}
-            </div>
-          )})}
-        
-          {journalView==="insights" && showInsightForm && (<div style={{background:"#0e1525",border:"1px solid #7c4dff33",borderRadius:8,padding:20,marginBottom:16}}>
-            <div style={{fontSize:10,color:"#7c4dff",letterSpacing:1,fontWeight:700,marginBottom:12}}>LOG INSIGHT</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:10,marginBottom:12}}>
-              <div><div style={{color:"#3a4a5e",fontSize:9,marginBottom:4}}>DATE</div><input type="date" value={newInsight.date} onChange={e=>setNewInsight({...newInsight,date:e.target.value})} style={inputSt}/></div>
-              <div><div style={{color:"#3a4a5e",fontSize:9,marginBottom:4}}>TYPE</div><select value={newInsight.type} onChange={e=>setNewInsight({...newInsight,type:e.target.value})} style={inputSt}><option>Epiphany</option><option>Thesis Change</option><option>Fundamental Shift</option><option>Conviction Change</option><option>Market Observation</option><option>Risk Alert</option></select></div>
-              <div><div style={{color:"#3a4a5e",fontSize:9,marginBottom:4}}>SYMBOL(S)</div><input value={newInsight.symbols} onChange={e=>setNewInsight({...newInsight,symbols:e.target.value.toUpperCase()})} style={inputSt} placeholder="QXO, GOOGL"/></div>
-              <div><div style={{color:"#3a4a5e",fontSize:9,marginBottom:4}}>PRIORITY</div><select value={newInsight.priority} onChange={e=>setNewInsight({...newInsight,priority:e.target.value})} style={inputSt}><option>Urgent</option><option>Important</option><option>Note</option></select></div>
-            </div>
-            <div style={{marginBottom:12}}><div style={{color:"#3a4a5e",fontSize:9,marginBottom:4}}>WHAT'S THE INSIGHT?</div><textarea value={newInsight.text} onChange={e=>setNewInsight({...newInsight,text:e.target.value})} style={{...inputSt,height:70,resize:"vertical"}} placeholder="I just realized that..."/></div>
-            <div style={{marginBottom:12}}><div style={{color:"#3a4a5e",fontSize:9,marginBottom:4}}>ACTION TO TAKE</div><textarea value={newInsight.action} onChange={e=>setNewInsight({...newInsight,action:e.target.value})} style={{...inputSt,height:50,resize:"vertical"}} placeholder="Trim position, research more, no action needed..."/></div>
-            <button onClick={addInsight} style={{...btnSt(true),padding:"8px 24px",fontSize:11,background:"#7c4dff",color:"#fff"}}>LOG INSIGHT</button>
-          </div>)}
-          {journalView==="insights" && insights.map(ins=>{const isExp=expandedInsight===ins.id;return(
-            <div key={ins.id} onClick={()=>setExpandedInsight(isExp?null:ins.id)} style={{background:isExp?"#111825":"#0e1525",border:"1px solid #182038",borderLeft:"3px solid "+(insightColors[ins.type]||"#3a4a5e"),borderRadius:"0 6px 6px 0",padding:"12px 16px",marginBottom:6,cursor:"pointer"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div style={{display:"flex",alignItems:"center",gap:10}}>
-                  <span style={{color:"#3a4a5e",fontSize:10}}>{ins.date}</span>
-                  <span style={{background:(insightColors[ins.type]||"#3a4a5e")+"33",color:insightColors[ins.type]||"#3a4a5e",padding:"2px 8px",borderRadius:3,fontSize:9,fontWeight:700}}>{ins.type}</span>
-                  <span style={{fontWeight:700,color:"#c8d0dc"}}>{ins.symbols}</span>
-                </div>
-                <span style={{background:(priorityColors[ins.priority]||"#3a4a5e")+"33",color:priorityColors[ins.priority]||"#3a4a5e",padding:"2px 8px",borderRadius:3,fontSize:8,fontWeight:700}}>{ins.priority}</span>
-              </div>
-              <div style={{color:"#c8d0dc",fontSize:11,marginTop:6,lineHeight:1.5}}>{ins.text}</div>
-              {isExp && ins.action && (<div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #182038"}}>
-                <div style={{color:"#ff9100",fontSize:9,letterSpacing:1,fontWeight:700,marginBottom:4}}>ACTION</div>
-                <div style={{color:"#c8d0dc",fontSize:11,lineHeight:1.5}}>{ins.action}</div>
-              </div>)}
-            </div>
-          )})}
-</div>)}
-
-        {/* ═══════════════ PERFORMANCE ═══════════════ */}
-        {tab === "performance" && (<div>
-          <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>
-            {[{id:"line",l:"Line & Area"},{id:"bar",l:"Bar Charts"},{id:"waterfall",l:"Waterfall"},{id:"scatter",l:"Risk/Return"},{id:"heatmap",l:"Heat Map"}].map(v=>
-              <button key={v.id} onClick={()=>setPerfView(v.id)} style={btnSt(perfView===v.id)}>{v.l}</button>
-            )}
-            <div style={{marginLeft:"auto",display:"flex",gap:3}}>
-              {Object.keys(timeRanges).map(r=><button key={r} onClick={()=>setTimeRange(r)} style={btnSt(timeRange===r)}>{r}</button>)}
-            </div>
-          </div>
-
-          {/* LINE & AREA */}
-          {perfView==="line"&&(<div>
-            <div style={{display:"flex",gap:8,marginBottom:12,alignItems:"center",flexWrap:"wrap"}}>
-              <select value={perfLineFilter} onChange={e=>{setPerfLineFilter(e.target.value)}} style={{background:"#111825",color:"#c8d0dc",border:"1px solid #151d2e",borderRadius:4,padding:"5px 10px",fontFamily:"inherit",fontSize:10}}>
-                <option value="household">Household Total</option>
-                <option value="owners">By Owner</option>
-                <option value="accounts">Select Accounts</option>
-                <option value="factors">Select Factors</option>
-                <option value="taxfree">Taxable vs Tax-Free</option>
-                <option value="risk">By Risk Tier</option>
-                <option value="conviction">By Conviction</option>
-                <option value="stacked">Stacked Area</option>
-              </select>
-              {perfLineFilter==="accounts"&&<div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-                {["Taxable","IRA","IRA","IRA","401k","401k","401k","Crypto"].map(a=>
-                  <button key={a} onClick={()=>setPerfSelAccts(prev=>prev.includes(a)?prev.filter(x=>x!==a):[...prev,a])} style={{padding:"3px 8px",background:perfSelAccts.includes(a)?(ACCT_COLORS[a]||"#00e5ff")+"33":"#0c1019",color:perfSelAccts.includes(a)?ACCT_COLORS[a]||"#00e5ff":"#3a4a5e",border:"1px solid "+(perfSelAccts.includes(a)?ACCT_COLORS[a]||"#00e5ff":"#151d2e"),borderRadius:3,cursor:"pointer",fontFamily:"inherit",fontSize:9,fontWeight:600}}>{a}</button>
-                )}
-              </div>}
-              {perfLineFilter==="factors"&&<div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-                {["Bitcoin/Crypto","AI/ML","Rollup/M&A","PropTech/RE","Gold/Inflation","Index/Passive","AdTech","Fintech","Sports/Betting","Data Centers"].map(f=>
-                  <button key={f} onClick={()=>setPerfSelFactors(prev=>prev.includes(f)?prev.filter(x=>x!==f):[...prev,f])} style={{padding:"3px 8px",background:perfSelFactors.includes(f)?(FACTORS[f]||"#666")+"33":"#0c1019",color:perfSelFactors.includes(f)?FACTORS[f]||"#666":"#3a4a5e",border:"1px solid "+(perfSelFactors.includes(f)?FACTORS[f]||"#666":"#151d2e"),borderRadius:3,cursor:"pointer",fontFamily:"inherit",fontSize:9,fontWeight:600}}>{f.split("/")[0]}</button>
-                )}
-              </div>}
-            </div>
-            <div style={{background:"#0c1019",border:"1px solid #151d2e",borderRadius:8,padding:16}}>
-              {perfLineFilter==="household"&&<LineChart data={filteredHistory} onClickDate={setSelectedDate} lines={[{key:"hh",label:"Household",color:"#00e5ff",width:2.5,acc:d=>d.household}]}/>}
-              {perfLineFilter==="owners"&&<LineChart data={filteredHistory} onClickDate={setSelectedDate} lines={[{key:"j",label:"Demo",color:"#00e5ff",acc:d=>(d.accounts?.Taxable||0)+(d.accounts?.Crypto||0)},{key:"jr",label:"Retirement",color:"#448aff",acc:d=>(d.accounts?.["IRA"]||0},{key:"jsr",label:"401k",color:"#69f0ae",acc:d=>(d.accounts?.["401k"]||0}]}/>}
-              {perfLineFilter==="accounts"&&<LineChart data={filteredHistory} onClickDate={setSelectedDate} height={300} lines={perfSelAccts.map(k=>({key:k,label:k,color:ACCT_COLORS[k]||"#666",width:2,acc:d=>d.accounts?.[k]||0}))}/>}
-              {perfLineFilter==="factors"&&<LineChart data={filteredHistory} onClickDate={setSelectedDate} height={300} lines={perfSelFactors.map(k=>({key:k,label:k.split("/")[0],color:FACTOR_CHART_COLORS[k]||"#666",width:2,acc:d=>d.factors?.[k]||0}))}/>}
-              {perfLineFilter==="taxfree"&&<LineChart data={filteredHistory} onClickDate={setSelectedDate} lines={[{key:"t",label:"Taxable",color:"#ef5350",width:2,acc:d=>(d.accounts?.Taxable||0)+(d.accounts?.Crypto||0)},{key:"f",label:"Tax-Advantaged",color:"#4caf50",width:2,acc:d=>d.household-(d.accounts?.Taxable||0)-(d.accounts?.Crypto||0)}]}/>}
-              {perfLineFilter==="risk"&&<LineChart data={filteredHistory} onClickDate={setSelectedDate} height={300} lines={[{key:"c",label:"Core",color:"#1565C0",width:2,acc:d=>d.household*.35},{key:"g",label:"Growth",color:"#2E7D32",width:1.5,acc:d=>d.household*.25},{key:"s",label:"Speculative",color:"#E65100",width:1.5,acc:d=>d.household*.15},{key:"m",label:"Moonshot",color:"#B71C1C",width:1.5,acc:d=>d.household*.10}]}/>}
-              {perfLineFilter==="conviction"&&<LineChart data={filteredHistory} onClickDate={setSelectedDate} height={300} lines={[{key:"h",label:"Hold",color:"#5c6b7a",width:2,acc:d=>d.household*.50},{key:"a",label:"Add",color:"#4caf50",width:2,acc:d=>d.household*.25},{key:"t",label:"Trim",color:"#ef5350",width:1.5,acc:d=>d.household*.15},{key:"r",label:"Review",color:"#ff9100",width:1.5,acc:d=>d.household*.10}]}/>}
-              {perfLineFilter==="stacked"&&<LineChart data={filteredHistory} onClickDate={setSelectedDate} height={300} lines={["Taxable","IRA","IRA","IRA","401k","401k","401k","Crypto"].map(k=>({key:k,label:k,color:ACCT_COLORS[k]||"#666",acc:d=>d.accounts?.[k]||0}))}/>}
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginTop:12}}>
-              {[["Starting",fmtF(filteredHistory[0]?.household||0),"#3a4a5e"],["Current",fmtF(filteredHistory[filteredHistory.length-1]?.household||0),"#00e5ff"],["$ P&L",(perf.household?.abs>=0?"+":"")+fmtF(perf.household?.abs||0),perf.household?.abs>=0?"#4caf50":"#ef5350"],["Annualized",(perf.household?.ann>=0?"+":"")+pct(perf.household?.ann||0),perf.household?.ann>=0?"#4caf50":"#ef5350"]].map((c,i)=>
-                <div key={i} style={{background:"#0c1019",border:"1px solid #151d2e",borderRadius:6,padding:"10px 14px",textAlign:"center"}}>
-                  <div style={{color:"#3a4a5e",fontSize:9,letterSpacing:1,marginBottom:3}}>{c[0]}</div>
-                  <div style={{fontSize:16,fontWeight:800,color:c[2]}}>{c[1]}</div>
-                </div>
-              )}
-
-            {selectedDate && (<div style={{background:"#0c1019",border:"1px solid #ff910033",borderRadius:8,padding:16,marginTop:12}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                <div style={{fontSize:11,color:"#ff9100",fontWeight:700,letterSpacing:1}}>SNAPSHOT: {new Date(selectedDate.ts).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"})}</div>
-                <button onClick={()=>setSelectedDate(null)} style={{background:"#1a274433",border:"1px solid #151d2e",borderRadius:4,color:"#3a4a5e",cursor:"pointer",padding:"3px 10px",fontFamily:"inherit",fontSize:9}}>CLOSE</button>
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8}}>
-                <div style={{background:"#111825",borderRadius:6,padding:"8px 12px",textAlign:"center"}}>
-                  <div style={{color:"#3a4a5e",fontSize:9,letterSpacing:1}}>HOUSEHOLD</div>
-                  <div style={{color:"#00e5ff",fontSize:16,fontWeight:800}}>{fmtF(selectedDate.household||0)}</div>
-                </div>
-                {selectedDate.accounts && Object.entries(selectedDate.accounts).filter(([k,v])=>k!=="IRA"&&v>5000).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([k,v])=>
-                  <div key={k} style={{background:"#111825",borderRadius:6,padding:"8px 12px",textAlign:"center"}}>
-                    <div style={{color:"#3a4a5e",fontSize:9,letterSpacing:1}}>{k}</div>
-                    <div style={{color:ACCT_COLORS[k]||"#c8d0dc",fontSize:14,fontWeight:700}}>{fmtF(v)}</div>
+              <div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700,marginBottom:8}}>RISK TIER BREAKDOWN</div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                {riskBreak.map(r=>(
+                  <div key={r.name} style={{background:"#0e1525",border:"1px solid #182038",borderRadius:6,padding:"6px 12px"}}>
+                    <span style={{fontSize:10,color:"#c8d0dc"}}>{r.name}</span>
+                    <span style={{fontSize:10,fontWeight:700,color:"#00e5ff",marginLeft:6}}>{pct(r.pct)}</span>
+                    <span style={{fontSize:9,color:"#3a4a5e",marginLeft:4}}>({filtered.filter(p=>p.risk===r.name).length})</span>
                   </div>
-                )}
-              </div>
-              {selectedDate.factors && (<div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:10}}>
-                {Object.entries(selectedDate.factors).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([k,v])=>
-                  <span key={k} style={{background:"#111825",borderRadius:4,padding:"4px 10px",fontSize:10}}>
-                    <span style={{color:FACTOR_CHART_COLORS[k]||"#5c6b7a"}}>{k.split("/")[0]}</span>
-                    <span style={{color:"#c8d0dc",marginLeft:4,fontWeight:600}}>{fmtF(v)}</span>
-                  </span>
-                )}
-              </div>)}
-            </div>)}
-            </div>
-          </div>)}
-
-          {/* BAR CHARTS */}
-          {perfView==="bar"&&(<div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-              <div style={{background:"#0c1019",border:"1px solid #151d2e",borderRadius:8,padding:16}}>
-                <div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700,marginBottom:8}}>RETURN % BY ACCOUNT ({timeRange})</div>
-                <BarChartH data={Object.keys(ACCT_COLORS).filter(k=>k!=="IRA"&&k!=="IRA").map(k=>({name:k,value:(perf[k]?.pct||0)*100,color:ACCT_COLORS[k],label:(perf[k]?.pct>=0?"+":"")+pct(perf[k]?.pct||0)}))}/>
-              </div>
-              <div style={{background:"#0c1019",border:"1px solid #151d2e",borderRadius:8,padding:16}}>
-                <div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700,marginBottom:8}}>RETURN % BY FACTOR ({timeRange})</div>
-                <BarChartH data={Object.keys(FACTOR_CHART_COLORS).map(k=>({name:k.split("/")[0],value:(perf["f_"+k]?.pct||0)*100,color:FACTOR_CHART_COLORS[k],label:(perf["f_"+k]?.pct>=0?"+":"")+pct(perf["f_"+k]?.pct||0)}))}/>
+                ))}
               </div>
             </div>
-            <div style={{background:"#0c1019",border:"1px solid #151d2e",borderRadius:8,padding:16,marginTop:12}}>
-              <div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700,marginBottom:8}}>$ P&L BY ACCOUNT</div>
-              <BarChartH data={Object.keys(ACCT_COLORS).filter(k=>k!=="IRA").map(k=>({name:k,value:perf[k]?.abs||0,color:ACCT_COLORS[k]}))}/>
-            </div>
-          </div>)}
-
-          {/* WATERFALL */}
-          {perfView==="waterfall"&&(<div>
-            <div style={{background:"#0c1019",border:"1px solid #151d2e",borderRadius:8,padding:16}}>
-              <div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700,marginBottom:4}}>P&L WATERFALL — WHAT DROVE YOUR GAINS & LOSSES</div>
-              <div style={{fontSize:9,color:"#5c6b7a",marginBottom:12}}>Each bar = unrealized P&L for that position. Green = gain, Red = loss. Sorted by impact.</div>
-              <BarChartH height={Math.max(300,consolidated.length*28)} data={consolidated.filter(c=>Math.abs(c.mv-c.basis)>500).map(c=>({name:c.name,value:c.mv-c.basis,color:c.mv>=c.basis?"#4caf50":"#ef5350",label:(c.mv>=c.basis?"+":"")+fmt(c.mv-c.basis)})).sort((a,b)=>b.value-a.value)}/>
-            </div>
-          </div>)}
-
-          {/* SCATTER */}
-          {perfView==="scatter"&&(<div>
-            <div style={{background:"#0c1019",border:"1px solid #151d2e",borderRadius:8,padding:16}}>
-              <div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700,marginBottom:4}}>RISK vs RETURN BY FACTOR</div>
-              <div style={{fontSize:9,color:"#5c6b7a",marginBottom:12}}>Bubble size = $ exposure. X-axis = volatility proxy. Y-axis = period return. Top-left = high return, low risk (ideal).</div>
-              <ScatterChart height={320} data={Object.keys(FACTOR_CHART_COLORS).map(f=>{
-                const p2=perf["f_"+f];if(!p2)return null;
-                const mv2=P.reduce((s,pos)=>s+pos.mv*(pos.factors?.[f]||0),0);
-                return{name:f.split("/")[0],x:Math.abs(p2.pct)*100+(Math.random()*3),y:p2.pct*100,size:mv2,color:FACTOR_CHART_COLORS[f]||"#666"};
-              }).filter(Boolean)}/>
-              <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:8}}>
-                {Object.keys(FACTOR_CHART_COLORS).map(f=>{const p2=perf["f_"+f];return p2?<span key={f} style={{fontSize:9,color:"#c8d0dc",display:"flex",alignItems:"center",gap:4}}><span style={{width:8,height:8,borderRadius:8,background:FACTOR_CHART_COLORS[f]}}/>{f.split("/")[0]}: {p2.pct>=0?"+":""}{pct(p2.pct)}</span>:null})}
+          </div>
+          <div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700,marginBottom:8}}>TOP POSITIONS</div>
+          {consolidated.slice(0,10).map(c=>(
+            <div key={c.name} style={{background:"#0e1525",border:"1px solid #182038",borderRadius:6,padding:"10px 16px",marginBottom:4,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <span style={{fontWeight:800,fontSize:14,color:"#c8d0dc",marginRight:12}}>{c.name}</span>
+                <span style={{color:"#00e5ff",fontWeight:700}}>{fmtF(c.mv)}</span>
+                <span style={{color:"#3a4a5e",marginLeft:8}}>{pct(c.mv/totalHH)}</span>
+              </div>
+              <div>
+                <span style={{color:c.mv>=c.basis?"#4caf50":"#ef5350",fontSize:11}}>{c.mv>=c.basis?"+":""}{fmt(c.mv-c.basis)}</span>
+                <span style={{color:"#3a4a5e",marginLeft:8,fontSize:10}}>{c.accounts.size} acct{c.accounts.size>1?"s":""}</span>
               </div>
             </div>
-          </div>)}
-
-          {/* HEATMAP */}
-          {perfView==="heatmap"&&(<div>
-            <div style={{background:"#0c1019",border:"1px solid #151d2e",borderRadius:8,padding:16}}>
-              <div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700,marginBottom:4}}>CONCENTRATION HEAT MAP — Accounts x Factors</div>
-              
-              <div style={{fontSize:9,color:"#5c6b7a",marginBottom:4,lineHeight:1.5}}>
-                HOW TO READ: Each cell shows what % of that account is exposed to that factor. Brighter green = heavy long exposure. Dark = no exposure. Use this to spot: (1) which accounts are concentrated in which themes, (2) where you have overlap across accounts, (3) which factors have no hedge.
-              </div>
-              <HeatMapChart rows={Object.keys(ACCT_COLORS).filter(k=>k!=="IRA")} cols={Object.keys(FACTOR_CHART_COLORS).slice(0,8)} getData={(acct,factor)=>{
-                const acctPos=P.filter(p=>p.acct===acct);
-                const exposure=acctPos.reduce((s,p)=>s+(p.mv*(p.factors?.[factor]||0)),0);
-                const total=acctPos.reduce((s,p)=>s+p.mv,0);
-                return total>0?exposure/total:0;
-              }}/>
-            </div>
-          </div>)}
+          ))}
         </div>)}
 
+        {/* FACTOR EXPOSURE */}
+        {tab==="factors"&&(<div>
+          <div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700,marginBottom:12}}>WEIGHTED FACTOR EXPOSURE</div>
+          {factorExp.map((f,i)=>(
+            <div key={f.name} style={{display:"flex",alignItems:"center",gap:12,marginBottom:6}}>
+              <span style={{width:120,fontSize:11,color:"#c8d0dc",textAlign:"right"}}>{f.name}</span>
+              <div style={{flex:1,height:24,background:"#111825",borderRadius:4,position:"relative",overflow:"hidden"}}>
+                <div style={{width:pct(f.pct),height:"100%",background:FACTOR_COLORS[f.name]||"#666",borderRadius:4,opacity:.7}}/>
+                <span style={{position:"absolute",left:8,top:5,fontSize:10,fontWeight:700,color:"#fff"}}>{pct(f.pct)} — {fmtF(f.val)}</span>
+              </div>
+            </div>
+          ))}
+        </div>)}
+
+        {/* ALL POSITIONS */}
+        {tab==="positions"&&(<div>
+          <div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700,marginBottom:8}}>ALL POSITIONS — {filtered.length}</div>
+          <div style={{background:"#0e1525",border:"1px solid #182038",borderRadius:6,overflow:"hidden"}}>
+            <div style={{display:"grid",gridTemplateColumns:"100px 90px 60px 50px 80px 80px 80px 80px 60px",padding:"8px 12px",background:"#0a0f1a",borderBottom:"1px solid #182038",fontSize:9,color:"#3a4a5e",letterSpacing:1,fontWeight:700}}>
+              <span>SYMBOL</span><span>ACCOUNT</span><span>TYPE</span><span>QTY</span><span>PRICE</span><span>BASIS</span><span>MV</span><span>P&L</span><span>RISK</span>
+            </div>
+            {filtered.map((p,i)=>{const pl=p.mv-p.basis;return(
+              <div key={p.id} style={{display:"grid",gridTemplateColumns:"100px 90px 60px 50px 80px 80px 80px 80px 60px",padding:"8px 12px",borderBottom:"1px solid #111a28",background:i%2===0?"#0e1525":"#0c1220",fontSize:11}}>
+                <span style={{fontWeight:700,color:ACCT_COLORS[p.acct]||"#c8d0dc"}}>{p.id}</span>
+                <span style={{color:"#3a4a5e"}}>{p.acct}</span>
+                <span>{p.type}</span>
+                <span>{p.qty}</span>
+                <span>${p.price}</span>
+                <span style={{color:"#3a4a5e"}}>{fmt(p.basis)}</span>
+                <span style={{color:"#00e5ff"}}>{fmt(p.mv)}</span>
+                <span style={{color:pl>=0?"#4caf50":"#ef5350"}}>{pl>=0?"+":""}{fmt(Math.abs(pl))}</span>
+                <span style={{fontSize:9,color:"#5c6b7a"}}>{p.risk}</span>
+              </div>
+            )})}
+          </div>
+        </div>)}
+
+        {/* OPTIONS */}
+        {tab==="options"&&(<div>
+          <div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700,marginBottom:8}}>OPTIONS & WARRANTS</div>
+          <div style={{background:"#0e1525",border:"1px solid #182038",borderRadius:6,overflow:"hidden"}}>
+            <div style={{display:"grid",gridTemplateColumns:"120px 90px 60px 50px 70px 90px 60px 80px 80px 70px",padding:"8px 12px",background:"#0a0f1a",borderBottom:"1px solid #182038",fontSize:9,color:"#3a4a5e",letterSpacing:1,fontWeight:700}}>
+              <span>SYMBOL</span><span>ACCOUNT</span><span>TYPE</span><span>QTY</span><span>STRIKE</span><span>EXPIRY</span><span>DTE</span><span>BASIS</span><span>MV</span><span>P&L</span>
+            </div>
+            {options.map((o,i)=>{const sc=o.dte<=14?"#ff1744":o.dte<=30?"#ff9100":"#4caf50";return(
+              <div key={o.id} style={{display:"grid",gridTemplateColumns:"120px 90px 60px 50px 70px 90px 60px 80px 80px 70px",padding:"8px 12px",borderBottom:"1px solid #111a28",background:o.dte<=14?"rgba(255,23,68,0.06)":i%2===0?"#0e1525":"#0c1220",fontSize:11}}>
+                <span style={{fontWeight:700}}>{o.id}</span>
+                <span style={{color:"#3a4a5e"}}>{o.acct}</span>
+                <span>{o.type}</span>
+                <span>{o.qty}</span>
+                <span>${o.strike}</span>
+                <span>{o.exp}</span>
+                <span style={{color:sc,fontWeight:700}}>{o.dte}d</span>
+                <span style={{color:"#3a4a5e"}}>{fmt(o.basis)}</span>
+                <span style={{color:"#00e5ff"}}>{fmt(o.mv)}</span>
+                <span style={{color:o.pl>=0?"#4caf50":"#ef5350"}}>{o.pl>=0?"+":""}{fmt(Math.abs(o.pl))}</span>
+              </div>
+            )})}
+          </div>
+        </div>)}
+
+        {/* PERFORMANCE */}
+        {tab==="performance"&&(<div>
+          <div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700,marginBottom:12}}>PERFORMANCE SUMMARY</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:16}}>
+            {[["Total Invested",fmtF(P.reduce((s,p)=>s+p.basis,0)),"#3a4a5e"],["Current Value",fmtF(totalMV),"#00e5ff"],["Unrealized P&L",(totalMV-P.reduce((s,p)=>s+p.basis,0)>=0?"+":"")+fmtF(totalMV-P.reduce((s,p)=>s+p.basis,0)),totalMV>=P.reduce((s,p)=>s+p.basis,0)?"#4caf50":"#ef5350"],["Return %",pct((totalMV-P.reduce((s,p)=>s+p.basis,0))/P.reduce((s,p)=>s+p.basis,0)),totalMV>=P.reduce((s,p)=>s+p.basis,0)?"#4caf50":"#ef5350"]].map((c,i)=>
+              <div key={i} style={{background:"#0e1525",border:"1px solid #182038",borderRadius:8,padding:"16px 20px",textAlign:"center"}}>
+                <div style={{color:"#3a4a5e",fontSize:9,letterSpacing:1,marginBottom:6}}>{c[0]}</div>
+                <div style={{fontSize:22,fontWeight:800,color:c[2]}}>{c[1]}</div>
+              </div>
+            )}
+          </div>
+          <div style={{fontSize:10,color:"#3a4a5e",letterSpacing:1,fontWeight:700,marginBottom:8}}>P&L BY POSITION</div>
+          {consolidated.map(c=>{const pl=c.mv-c.basis;const plPct=c.basis>0?pl/c.basis:0;return(
+            <div key={c.name} style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}>
+              <span style={{width:60,fontSize:11,fontWeight:700,color:"#c8d0dc",textAlign:"right"}}>{c.name}</span>
+              <div style={{flex:1,height:22,background:"#111825",borderRadius:4,position:"relative",overflow:"hidden"}}>
+                <div style={{width:Math.min(100,Math.abs(plPct)*100)+"%",height:"100%",background:pl>=0?"#4caf50":"#ef5350",borderRadius:4,opacity:.6}}/>
+                <span style={{position:"absolute",left:8,top:4,fontSize:9,fontWeight:700,color:"#fff"}}>{pl>=0?"+":""}{fmt(Math.abs(pl))} ({plPct>=0?"+":""}{pct(plPct)})</span>
+              </div>
+            </div>
+          )})}
+        </div>)}
 
       </div>
     </div>
   );
 }
-
-
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 </script>
 </body>
 </html>
