@@ -139,6 +139,7 @@ function App(){
   const [expandInsight,setExpandInsight]=useState(null);
   const [optSort,setOptSort]=useState({col:"dte",dir:1});
   const [retPeriod,setRetPeriod]=useState("ALL");
+  const [retChartHover,setRetChartHover]=useState(null);
   const [chatInput,setChatInput]=useState("");
   const [chatMsgs,setChatMsgs]=useState([{role:"ai",text:"Welcome! I'm your portfolio AI strategist. Ask me about your positions, risk exposure, or what to do next."}]);
   const sortO=col=>{if(optSort.col===col)setOptSort({col,dir:optSort.dir*-1});else setOptSort({col,dir:1})};
